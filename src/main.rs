@@ -81,61 +81,86 @@ fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, i
     Ok(paths)
 }
 #[cfg(test)]
-mod tests {
-    use std::os::fd::AsFd;
+mod get_dirs {
 
     use super::*;
+
+    // Helper function for a test preperation, creates a temp directory for test purposes
+    fn prepair_tmp_dir(tmp_dir_abs_path: &str) {
+        clean_up_tmp_dir(tmp_dir_abs_path);
+        Command::new("mkdir")
+            .arg("-p")
+            .arg(tmp_dir_abs_path)
+            .status()
+            .expect("mkdir couldn't execute to create temporary test dir");
+    }
+
+    // Helper function for clean up the created test directory after test
+    fn clean_up_tmp_dir(tmp_dir_abs_path: &str) {
+        if Command::new("ls")
+            .arg(tmp_dir_abs_path)
+            .status()
+            .expect("Couldn't remove test directory with rm")
+            .success()
+        {
+            Command::new("rm")
+                .arg("-r")
+                .arg(tmp_dir_abs_path)
+                .status()
+                .expect("Couldn't remove test directory with rm");
+        }
+    }
+
     #[test]
     fn get_dirs_detects_right_test() {
         // prepair
-        let status = Command::new("mkdir")
-            .current_dir("/tmp/")
-            .arg("aur_relper_rs_test")
-            .status()
-            .expect("Couldn't created directory in /tmp!");
-        if !status.success() {
-            Command::new("rm")
-                .current_dir("/tmp")
-                .arg("-r")
-                .arg("aur_relper_rs_test")
-                .status()
-                .expect("Error on remove of test directory BEFORE TEST!");
-
-            Command::new("mkdir")
-                .current_dir("/tmp/")
-                .arg("aur_relper_rs_test")
-                .status()
-                .expect("Couldn't created directory in /tmp!");
-        }
+        let tmp_path = "/tmp/aur_helper_rs_test/get_dirs_detects_right_test".to_string();
+        prepair_tmp_dir(&tmp_path.as_str());
         Command::new("mkdir")
-            .current_dir("/tmp/aur_relper_rs_test")
+            .current_dir(tmp_path.as_str())
             .arg("test_dir1")
             .arg("test_dir2")
             .arg("test_dir3")
             .status()
             .expect("Couldn't create subdirs in test");
-        // test
-        let paths = get_dirs(Path::new("/tmp/aur_relper_rs_test/"), true);
+
+        // TEST
+        let paths = get_dirs(Path::new("/tmp/aur_helper_rs_test/"), true);
+
         assert!(paths.is_ok());
-        let actual_paths_cmd = Command::new("ls")
-            .arg("-d1")
-            .arg(r#"/tmp/aur_relper_rs_test/*"#)
-            .output()
-            .expect("ls couldn't excute!");
+
         let mut actual_paths: Vec<PathBuf> = Vec::new();
-        // let str_path = actual_paths_cmd.stdout.escape_ascii();
-        for x in actual_paths_cmd.stdout {
-            let mut p = PathBuf::new();
-            p.push(Path::new(x.escape_ascii().to_string()));
-            actual_paths.push(p);
-        }
-        assert_eq!(paths.unwrap(), actual_paths);
+        actual_paths.push(Path::new(&(tmp_path.clone() + "test_dir1")).to_path_buf());
+        actual_paths.push(Path::new(&(tmp_path.clone() + "test_dir2")).to_path_buf());
+        actual_paths.push(Path::new(&(tmp_path.clone() + "test_dir3")).to_path_buf());
+
+        assert_eq!(paths.unwrap().sort(), actual_paths.sort());
+
         // clean up
-        Command::new("rm")
-            .current_dir("/tmp/")
-            .arg("-r")
-            .arg("aur_relper_rs_test")
+        clean_up_tmp_dir(&tmp_path);
+    }
+
+    #[test]
+    fn get_dirs_error_test() {
+        // prepair
+        let tmp_path = "/tmp/aur_helper_rs_test/get_dirs_error_test";
+        let test_file = tmp_path.to_owned() + "/test_file.txt";
+        prepair_tmp_dir(&tmp_path);
+        println!("{}", test_file.as_str());
+
+        Command::new("touch")
+            .arg(test_file.as_str())
             .status()
-            .expect("Couldn't remove test directory AFTER TEST!!");
+            .expect("Failed to touch a file in the test directory");
+
+        // TEST
+        let err = get_dirs(Path::new(tmp_path), true);
+        let err2 = get_dirs(Path::new(test_file.as_str()), true);
+
+        assert!(err.is_err());
+        assert!(err2.is_err());
+
+        // clean up
+        clean_up_tmp_dir(&tmp_path);
     }
 }
