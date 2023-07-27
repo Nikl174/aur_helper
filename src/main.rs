@@ -101,8 +101,9 @@ fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, i
     }
     Ok(paths)
 }
+
 #[cfg(test)]
-mod get_dirs {
+mod tests {
 
     use super::*;
 
@@ -125,7 +126,7 @@ mod get_dirs {
             .success()
         {
             Command::new("rm")
-                .arg("-r")
+                .arg("-rf")
                 .arg(tmp_dir_abs_path)
                 .status()
                 .expect("Couldn't remove test directory with rm");
@@ -183,5 +184,43 @@ mod get_dirs {
 
         // clean up
         clean_up_tmp_dir(&tmp_path);
+    }
+
+    #[test]
+    fn update_packages_test() {
+        let tmp_path = "/tmp/aur_helper_rs_test/update_packages_test/";
+        prepair_tmp_dir(tmp_path);
+        println!("{}",&(tmp_path.to_owned() + "swaylock-effects-git"));
+        Command::new("git")
+            .current_dir(&tmp_path)
+            .arg("clone")
+            .arg("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git")
+            .status()
+            .expect("Failed to clone the repository!");
+        Command::new("git")
+            .current_dir(&tmp_path)
+            .arg("clone")
+            .arg("https://aur.archlinux.org/swaylock-effects-git.git")
+            .status()
+            .expect("Failed to clone the repository!");
+        Command::new("git")
+            .current_dir(&(tmp_path.to_owned() + "swaylock-effects-git"))
+            .arg("reset")
+            .arg("HEAD^^")
+            .status()
+            .expect("Failed to restore the repo swaylock-effects-git");
+        Command::new("git")
+            .current_dir(&(tmp_path.to_owned() + "swaylock-effects-git"))
+            .arg("restore")
+            .arg(".")
+            .status()
+            .expect("Failed to restore the repo swaylock-effects-git");
+        let dirs = get_dirs(Path::new(tmp_path), false);
+        assert!(dirs.is_ok());
+        let success_dirs = update_packages(dirs.as_ref().unwrap());
+        assert!(success_dirs.is_ok());
+        assert_eq!(success_dirs.unwrap(), dirs.unwrap());
+
+        clean_up_tmp_dir(tmp_path);
     }
 }
