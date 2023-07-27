@@ -1,16 +1,19 @@
 use std::env;
 use std::fs;
 use std::io;
+use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process;
 use std::process::Command;
 use std::process::ExitStatus;
+use std::str;
+use std::str::from_utf8;
 
 // TODO:
 // aur_helper update [dir]
 // aur_helper build [dir]
 // ? aur_helper install [dir]
+// clap for cli tool
 fn main() {
     let mut args = env::args();
     // skip programm name
@@ -39,7 +42,11 @@ fn main() {
     match update_packages(&dirs) {
         Ok(vec) => {
             for x in vec {
-                println!("Updated package: {}", x.to_str().unwrap());
+                if x.1 {
+                    println!("Updated package: {}", x.0.to_str().unwrap());
+                } else {
+                    println!("Package {} already up to date", x.0.to_str().unwrap());
+                }
             }
         }
         Err(vec) => {
@@ -54,21 +61,27 @@ fn main() {
     }
 }
 
-// goes through the directories and calls 'git pull' and returns a vector of successfull updated
-// dirs the exit status, if a command fails
-fn update_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
+// goes through the directories and calls 'git pull' and returns a tuple vector of successfull updated
+// dirs and bool, if the repo was updated and on fail a vector of the failed dirs and their  the exit status
+fn update_packages(
+    dirs: &Vec<PathBuf>,
+) -> Result<Vec<(PathBuf, bool)>, Vec<(PathBuf, ExitStatus)>> {
     let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
-    let mut success_dirs: Vec<PathBuf> = Vec::new();
+    let mut success_dirs: Vec<(PathBuf, bool)> = Vec::new();
     for dir in dirs {
-        let status = Command::new("git")
+        let output = Command::new("git")
             .arg("pull")
             .current_dir(dir.clone())
-            .status()
+            .output()
             .expect("Failed to execute git pull!");
-        if status.success() {
-            success_dirs.push(dir.clone());
+
+        if output.status.success() {
+            let true_success =
+                !(from_utf8(output.stdout.as_slice()).unwrap() == "Already up to date.\n");
+
+            success_dirs.push((dir.clone(), true_success));
         } else {
-            failed_dirs.push((dir.clone(), status));
+            failed_dirs.push((dir.clone(), output.status));
         }
     }
     if failed_dirs.is_empty() {
@@ -104,6 +117,28 @@ fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, i
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn utf8_conversion_test() {
+        let tmp_path = "/tmp/aur_helper_rs_test/utf8_conversion_test/";
+        prepair_tmp_dir(tmp_path);
+        Command::new("git")
+            .current_dir(&tmp_path)
+            .arg("clone")
+            .arg("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git")
+            .status()
+            .expect("Failed to clone the repository!");
+        let output = Command::new("git")
+            .arg("pull")
+            .current_dir(&(tmp_path.to_owned() + "sway-audio-idle-inhibit-git"))
+            .output()
+            .expect("Failed to execute git pull!");
+
+        assert_eq!(
+            from_utf8(output.stdout.as_slice()).unwrap(),
+            "Already up to date.\n"
+        );
+        clean_up_tmp_dir(tmp_path);
+    }
 
     use super::*;
 
@@ -219,7 +254,9 @@ mod tests {
         assert!(dirs.is_ok());
         let success_dirs = update_packages(dirs.as_ref().unwrap());
         assert!(success_dirs.is_ok());
-        assert_eq!(success_dirs.unwrap(), dirs.unwrap());
+        for i in iter::zip(success_dirs.unwrap(), dirs.unwrap()) {
+            assert_eq!(i.0 .0, i.1);
+        }
 
         clean_up_tmp_dir(tmp_path);
     }
