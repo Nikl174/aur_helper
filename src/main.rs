@@ -25,33 +25,54 @@ fn main() {
         }
     };
 
+    let mut dirs: Vec<PathBuf> = Vec::new();
     match get_dirs(Path::new(&path), true) {
         Ok(x) => {
             for i in &x {
                 let p = i.to_str().unwrap();
                 println!("{p}");
             }
+            dirs = x;
         }
         Err(x) => println!("Error: {}", x),
     }
+    match update_packages(&dirs) {
+        Ok(vec) => {
+            for x in vec {
+                println!("Updated package: {}", x.to_str().unwrap());
+            }
+        }
+        Err(vec) => {
+            for x in vec {
+                println!(
+                    "Couldn't update package {}, failed with error {}",
+                    x.0.to_str().unwrap(),
+                    x.1.to_string()
+                )
+            }
+        }
+    }
 }
 
-// goes through the directories and calls 'git pull' and returns the exit status, if a command
-// fails
-fn update_packages(dirs: Vec<PathBuf>) -> Result<(), Vec<(PathBuf, ExitStatus)>> {
+// goes through the directories and calls 'git pull' and returns a vector of successfull updated
+// dirs the exit status, if a command fails
+fn update_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
     let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
+    let mut success_dirs: Vec<PathBuf> = Vec::new();
     for dir in dirs {
         let status = Command::new("git")
             .arg("pull")
             .current_dir(dir.clone())
             .status()
             .expect("Failed to execute git pull!");
-        if !status.success() {
-            failed_dirs.push((dir, status));
+        if status.success() {
+            success_dirs.push(dir.clone());
+        } else {
+            failed_dirs.push((dir.clone(), status));
         }
     }
     if failed_dirs.is_empty() {
-        return Ok(());
+        return Ok(success_dirs);
     }
     Err(failed_dirs)
 }
