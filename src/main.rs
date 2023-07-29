@@ -61,6 +61,123 @@ fn main() {
     }
 }
 
+#[derive(Parser)]
+#[command(author, version, about, long_about=None)]
+struct Cli {
+    /// update packages
+    #[arg(short, long)]
+    update: Option<bool>,
+
+    /// build packages with 'makepkg'
+    #[arg(short, long)]
+    build: Option<bool>,
+
+    /// install the packages with pacman, requires root!
+    #[arg(short, long)]
+    install: Option<bool>,
+}
+
+// fn install_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<PathBuf>> {
+fn install_packages(dirs: Vec<PathBuf>) -> Result<Command, Vec<PathBuf>> {
+    let mut failed_packges: Vec<PathBuf> = Vec::new();
+    let mut packages: Vec<PathBuf> = Vec::new();
+    for dir in dirs {
+        match fs::read_dir(dir.clone()) {
+            Ok(read_dir) => {
+                let files = get_latest_build_package(read_dir);
+                match files {
+                    Ok(path_buf) => {
+                        packages.push(path_buf);
+                    }
+                    Err(e) => {
+                        println!("WARNING: couldn't find a build package, error: {}", e);
+                        failed_packges.push(dir.to_path_buf());
+                    }
+                }
+            }
+            Err(_) => {
+                failed_packges.push(dir.to_path_buf());
+            }
+        }
+    }
+
+    if failed_packges.is_empty() {
+        let mut inst_cmd = Command::new("sudo");
+        inst_cmd.arg("pacman");
+        inst_cmd.arg("-U");
+        for package in packages {
+            inst_cmd.arg(package.to_str().expect("Couldn't convert path to string"));
+        }
+        println!("{:?}", inst_cmd);
+        Ok(inst_cmd)
+    } else {
+        Err(failed_packges)
+    }
+}
+
+// finds the build package-files in a directory
+fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
+    let mut possible_packages: Vec<DirEntry> = Vec::new();
+    for file_res in dir {
+        // TODO: better error handling
+        let file = file_res.expect("read_dir failed to retreave a file");
+        let file_metadata = file.metadata().expect("couldn't get metadata");
+        if file_metadata.is_file() {
+            let file_name = file
+                .file_name()
+                .into_string()
+                .expect("Failed to convert from OsString to String");
+            let file_name_slice: Vec<&str> = file_name.split(".").collect();
+            match file_name_slice.last() {
+                Some(last) => {
+                    if last == &"zst" {
+                        possible_packages.push(file);
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+    if possible_packages.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Couldn't find a build package-file",
+        ));
+    } else {
+        let mut min: DirEntry = possible_packages.pop().unwrap();
+        let mut min_modified = min.metadata()?.modified().unwrap();
+        for file in possible_packages {
+            let file_modifed = file.metadata()?.modified().unwrap(); // unwrap because it is always available in linux
+            if file_modifed < min_modified {
+                min = file;
+                min_modified = file_modifed;
+            };
+        }
+        return Ok(min.path());
+    }
+}
+
+// build all packages in dir
+fn build_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
+    let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
+    let mut success_dirs: Vec<PathBuf> = Vec::new();
+    for dir in dirs {
+        let status = Command::new("makepkg")
+            .current_dir(dir.clone())
+            .status()
+            .expect("Failed to execute makepkg");
+        if status.success() {
+            success_dirs.push(dir.clone());
+        } else {
+            failed_dirs.push((dir.clone(), status));
+        }
+    }
+    if failed_dirs.is_empty() {
+        return Ok(success_dirs);
+    }
+    Err(failed_dirs)
+}
+
 // goes through the directories and calls 'git pull' and returns a tuple vector of successfull updated
 // dirs and bool, if the repo was updated and on fail a vector of the failed dirs and their  the exit status
 fn update_packages(
