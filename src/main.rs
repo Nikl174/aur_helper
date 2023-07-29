@@ -285,6 +285,18 @@ mod tests {
         }
     }
 
+    fn prepair_aur_test_dir(tmp_dir_abs_path: &str, git_links: &Vec<String>) {
+        prepair_tmp_dir(tmp_dir_abs_path);
+        for link in git_links {
+            Command::new("git")
+                .current_dir(tmp_dir_abs_path)
+                .arg("clone")
+                .arg(link)
+                .status()
+                .expect("Failed to execute git clone in tmp dir");
+        }
+    }
+
     #[test]
     fn get_dirs_detects_right_test() {
         // prepair
@@ -341,20 +353,11 @@ mod tests {
     #[test]
     fn update_packages_test() {
         let tmp_path = "/tmp/aur_helper_rs_test/update_packages_test/";
-        prepair_tmp_dir(tmp_path);
-        println!("{}",&(tmp_path.to_owned() + "swaylock-effects-git"));
-        Command::new("git")
-            .current_dir(&tmp_path)
-            .arg("clone")
-            .arg("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git")
-            .status()
-            .expect("Failed to clone the repository!");
-        Command::new("git")
-            .current_dir(&tmp_path)
-            .arg("clone")
-            .arg("https://aur.archlinux.org/swaylock-effects-git.git")
-            .status()
-            .expect("Failed to clone the repository!");
+        let mut git_links: Vec<String> = Vec::new();
+        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
+        prepair_aur_test_dir(tmp_path, &git_links);
+
         Command::new("git")
             .current_dir(&(tmp_path.to_owned() + "swaylock-effects-git"))
             .arg("reset")
