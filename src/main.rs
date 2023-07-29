@@ -380,4 +380,55 @@ mod tests {
 
         clean_up_tmp_dir(tmp_path);
     }
+
+    #[test]
+    fn build_packages_test() {
+        let tmp_path = "/tmp/aur_helper_rs_test/build_packages_test/";
+        let mut git_links: Vec<String> = Vec::new();
+        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
+        prepair_aur_test_dir(tmp_path, &git_links);
+
+        let mut dirs = get_dirs(&Path::new(tmp_path), true);
+        assert!(dirs.is_ok());
+        let no_err = build_packages(dirs.unwrap());
+        assert!(no_err.is_ok());
+
+        clean_up_tmp_dir(tmp_path);
+
+        git_links.clear();
+        git_links.push("https://github.com/Nikl174/simple_aur_helper.git".to_owned());
+
+        prepair_aur_test_dir(tmp_path, &git_links);
+
+        dirs = get_dirs(&Path::new(tmp_path), true);
+        assert!(dirs.is_ok());
+        let err = build_packages(dirs.unwrap());
+        assert!(err.is_err());
+
+        clean_up_tmp_dir(tmp_path);
+    }
+
+    #[test]
+    fn install_packages_test() {
+        let tmp_path = "/tmp/aur_helper_rs_test/find_build_packages/";
+        let mut git_links: Vec<String> = Vec::new();
+        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/persway.git".to_owned());
+        prepair_aur_test_dir(tmp_path, &git_links);
+        
+        let dirs = get_dirs(&Path::new(tmp_path), true);
+        assert!(dirs.is_ok());
+
+        let dirs = dirs.unwrap();
+
+        let no_err = build_packages(dirs.clone());
+        assert!(no_err.is_ok());
+
+        let no_err = install_packages(dirs.clone());
+        assert!(no_err.is_ok());
+
+        clean_up_tmp_dir(tmp_path);
+    }
 }
