@@ -1,12 +1,16 @@
+use clap::Arg;
+use clap::{arg, Parser, Subcommand};
 use std::env;
 use std::fs;
+use std::fs::read_dir;
+use std::fs::DirEntry;
+use std::fs::ReadDir;
 use std::io;
 use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
-use std::str;
 use std::str::from_utf8;
 
 // TODO:
@@ -15,66 +19,87 @@ use std::str::from_utf8;
 // ? aur_helper install [dir]
 // clap for cli tool
 fn main() {
-    let mut args = env::args();
-    // skip programm name
-    args.next();
-    let dir = args.next();
-
-    let path = match dir {
-        Some(x) => x,
-        None => {
-            println!("No argument provided!");
-            return;
-        }
-    };
-
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    match get_dirs(Path::new(&path), true) {
-        Ok(x) => {
-            for i in &x {
-                let p = i.to_str().unwrap();
-                println!("{p}");
-            }
-            dirs = x;
-        }
-        Err(x) => println!("Error: {}", x),
-    }
-    match update_packages(&dirs) {
-        Ok(vec) => {
-            for x in vec {
-                if x.1 {
-                    println!("Updated package: {}", x.0.to_str().unwrap());
-                } else {
-                    println!("Package {} already up to date", x.0.to_str().unwrap());
-                }
-            }
-        }
-        Err(vec) => {
-            for x in vec {
-                println!(
-                    "Couldn't update package {}, failed with error {}",
-                    x.0.to_str().unwrap(),
-                    x.1.to_string()
-                )
-            }
-        }
-    }
+    // let mut args = env::args();
+    // // skip programm name
+    // args.next();
+    // let dir = args.next();
+    //
+    // let path = match dir {
+    //     Some(x) => x,
+    //     None => {
+    //         println!("No argument provided!");
+    //         return;
+    //     }
+    // };
+    //
+    // let mut dirs: Vec<PathBuf> = Vec::new();
+    // match get_dirs(Path::new(&path), true) {
+    //     Ok(x) => {
+    //         for i in &x {
+    //             let p = i.to_str().unwrap();
+    //             println!("{p}");
+    //         }
+    //         dirs = x;
+    //     }
+    //     Err(x) => println!("Error: {}", x),
+    // }
+    // match update_packages(dirs.clone()) {
+    //     Ok(vec) => {
+    //         for x in dirs {
+    //             if vec.contains(&x) {
+    //                 println!("Updated package: {}", x.to_str().unwrap());
+    //             }
+    //             // println!("Package {} already up to date", x.0.to_str().unwrap());
+    //         }
+    //     }
+    //     Err(vec) => {
+    //         for x in vec {
+    //             println!(
+    //                 "Couldn't update package {}, failed with error {}",
+    //                 x.0.to_str().unwrap(),
+    //                 x.1.to_string()
+    //             )
+    //         }
+    //     }
+    // }
 }
-
-#[derive(Parser)]
-#[command(author, version, about, long_about=None)]
-struct Cli {
-    /// update packages
-    #[arg(short, long)]
-    update: Option<bool>,
-
-    /// build packages with 'makepkg'
-    #[arg(short, long)]
-    build: Option<bool>,
-
-    /// install the packages with pacman, requires root!
-    #[arg(short, long)]
-    install: Option<bool>,
+// build the CLI with clap, -> pacman as inspiration
+fn cli() -> clap::Command {
+    let cmd = clap::Command::new("aur_helper")
+        .about("a simple aur package helper for updating, building and installing AUR packages in a directory");
+    cmd.subcommand(
+        clap::Command::new("update")
+            .short_flag('U')
+            .about("updates the git repos in the directory")
+            .arg(
+                Arg::new("build")
+                    .short('b')
+                    .help("builds the updated packages"),
+            )
+            .arg(
+                Arg::new("install").short('i').help(
+                    "generates the pacman command and installs the build packages, CALLS SUDO!",
+                ),
+            ),
+    )
+    .subcommand(
+        clap::Command::new("build")
+            .short_flag('B')
+            .about("builds the packages recursively")
+            .arg(
+                Arg::new("install").short('i').help(
+                    "generates the pacman command and installs the build packages, CALLS SUDO!",
+                ),
+            ),
+    )
+    .subcommand(
+        clap::Command::new("install").short_flag('I').about(
+            "generates the pacman command and installs the LAST BUILD packages, CALLS SUDO!",
+        ),
+    )
+    .arg(arg!(<AUR_PATH> "The path to the aur-directories"))
+    .arg_required_else_help(true)
+    .subcommand_required(true)
 }
 
 // fn install_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<PathBuf>> {
