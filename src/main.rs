@@ -78,7 +78,7 @@ struct Cli {
 }
 
 // fn install_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<PathBuf>> {
-fn install_packages(dirs: Vec<PathBuf>) -> Result<Command, Vec<PathBuf>> {
+fn install_packages(dirs: Vec<PathBuf>) -> Result<Command, (Command, Vec<PathBuf>)> {
     let mut failed_packges: Vec<PathBuf> = Vec::new();
     let mut packages: Vec<PathBuf> = Vec::new();
     for dir in dirs {
@@ -100,22 +100,20 @@ fn install_packages(dirs: Vec<PathBuf>) -> Result<Command, Vec<PathBuf>> {
             }
         }
     }
-
+    let mut inst_cmd = Command::new("sudo");
+    inst_cmd.arg("pacman");
+    inst_cmd.arg("-U");
+    for package in packages {
+        inst_cmd.arg(package.to_str().expect("Couldn't convert path to string"));
+    }
     if failed_packges.is_empty() {
-        let mut inst_cmd = Command::new("sudo");
-        inst_cmd.arg("pacman");
-        inst_cmd.arg("-U");
-        for package in packages {
-            inst_cmd.arg(package.to_str().expect("Couldn't convert path to string"));
-        }
-        println!("{:?}", inst_cmd);
         Ok(inst_cmd)
     } else {
-        Err(failed_packges)
+        Err((inst_cmd, failed_packges))
     }
 }
 
-// finds the build package-files in a directory
+// finds the build package-files in a directory and fails, if not file was found
 fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
     let mut possible_packages: Vec<DirEntry> = Vec::new();
     for file_res in dir {
