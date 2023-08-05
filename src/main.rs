@@ -178,13 +178,11 @@ fn build_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, Exit
     Err(failed_dirs)
 }
 
-// goes through the directories and calls 'git pull' and returns a tuple vector of successfull updated
-// dirs and bool, if the repo was updated and on fail a vector of the failed dirs and their  the exit status
-fn update_packages(
-    dirs: &Vec<PathBuf>,
-) -> Result<Vec<(PathBuf, bool)>, Vec<(PathBuf, ExitStatus)>> {
+// goes through the directories and calls 'git pull' and returns a tuple vector of successful updated
+// dirs and on fail a vector of the failed dirs and their  the exit status
+fn update_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
     let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
-    let mut success_dirs: Vec<(PathBuf, bool)> = Vec::new();
+    let mut true_success_dirs: Vec<PathBuf> = Vec::new();
     for dir in dirs {
         let output = Command::new("git")
             .arg("pull")
@@ -193,16 +191,15 @@ fn update_packages(
             .expect("Failed to execute git pull!");
 
         if output.status.success() {
-            let true_success =
-                !(from_utf8(output.stdout.as_slice()).unwrap() == "Already up to date.\n");
-
-            success_dirs.push((dir.clone(), true_success));
+            if !(from_utf8(output.stdout.as_slice()).unwrap() == "Already up to date.\n") {
+                true_success_dirs.push(dir.clone());
+            }
         } else {
             failed_dirs.push((dir.clone(), output.status));
         }
     }
     if failed_dirs.is_empty() {
-        return Ok(success_dirs);
+        return Ok(true_success_dirs);
     }
     Err(failed_dirs)
 }
