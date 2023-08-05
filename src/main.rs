@@ -144,6 +144,7 @@ fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
             "Couldn't find a build package-file",
         ));
     } else {
+        // TODO: don't depend on metada, depend on pkg version name
         let mut min: DirEntry = possible_packages.pop().unwrap();
         let mut min_modified = min.metadata()?.modified().unwrap();
         for file in possible_packages {
@@ -157,7 +158,7 @@ fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
     }
 }
 
-// build all packages in dir
+// build all packages in dir, returns build packages of on err the failed packages and the status
 fn build_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
     let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
     let mut success_dirs: Vec<PathBuf> = Vec::new();
