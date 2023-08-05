@@ -270,10 +270,12 @@ mod tests {
     fn clean_up_tmp_dir(tmp_dir_abs_path: &str) {
         if Command::new("ls")
             .arg(tmp_dir_abs_path)
-            .status()
-            .expect("Couldn't remove test directory with rm")
+            .output()
+            .expect("Couldn't ls a directory")
+            .status
             .success()
         {
+            println!("Removing: {}", tmp_dir_abs_path);
             Command::new("rm")
                 .arg("-rf")
                 .arg(tmp_dir_abs_path)
@@ -351,28 +353,31 @@ mod tests {
     fn update_packages_test() {
         let tmp_path = "/tmp/aur_helper_rs_test/update_packages_test/";
         let mut git_links: Vec<String> = Vec::new();
-        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
-        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-blur-bin.git".to_owned());
+        git_links.push("https://aur.archlinux.org/yofi-bin.git".to_owned());
         prepair_aur_test_dir(tmp_path, &git_links);
+        let update_dir_path = tmp_path.to_owned() + "yofi-bin";
 
         Command::new("git")
-            .current_dir(&(tmp_path.to_owned() + "swaylock-effects-git"))
+            .current_dir(&update_dir_path)
             .arg("reset")
             .arg("HEAD^^")
             .status()
-            .expect("Failed to restore the repo swaylock-effects-git");
+            .expect("Failed to reset the repo yofi-bin");
         Command::new("git")
-            .current_dir(&(tmp_path.to_owned() + "swaylock-effects-git"))
+            .current_dir(&update_dir_path)
             .arg("restore")
             .arg(".")
             .status()
-            .expect("Failed to restore the repo swaylock-effects-git");
-        let dirs = get_dirs(Path::new(tmp_path), false);
+            .expect("Failed to restore the repo yofi-bin");
+        let dirs = get_dirs(Path::new(tmp_path), true);
         assert!(dirs.is_ok());
-        let success_dirs = update_packages(dirs.as_ref().unwrap());
+        let mut updated_dirs: Vec<PathBuf> = Vec::new();
+        updated_dirs.push(Path::new(&update_dir_path).to_path_buf());
+        let success_dirs = update_packages(dirs.unwrap());
         assert!(success_dirs.is_ok());
-        for i in iter::zip(success_dirs.unwrap(), dirs.unwrap()) {
-            assert_eq!(i.0 .0, i.1);
+        for i in iter::zip(success_dirs.unwrap(), updated_dirs) {
+            assert_eq!(i.0, i.1);
         }
 
         clean_up_tmp_dir(tmp_path);
@@ -382,8 +387,8 @@ mod tests {
     fn build_packages_test() {
         let tmp_path = "/tmp/aur_helper_rs_test/build_packages_test/";
         let mut git_links: Vec<String> = Vec::new();
-        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
-        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-blur-bin.git".to_owned());
+        git_links.push("https://aur.archlinux.org/yofi-bin".to_owned());
         prepair_aur_test_dir(tmp_path, &git_links);
 
         let mut dirs = get_dirs(&Path::new(tmp_path), true);
@@ -410,11 +415,11 @@ mod tests {
     fn install_packages_test() {
         let tmp_path = "/tmp/aur_helper_rs_test/find_build_packages/";
         let mut git_links: Vec<String> = Vec::new();
-        git_links.push("https://aur.archlinux.org/sway-audio-idle-inhibit-git.git".to_owned());
-        git_links.push("https://aur.archlinux.org/swaylock-effects-git.git".to_owned());
-        git_links.push("https://aur.archlinux.org/persway.git".to_owned());
+        git_links.push("https://aur.archlinux.org/swaylock-blur-bin.git".to_owned());
+        git_links.push("https://aur.archlinux.org/packages/yofi-bin".to_owned());
+        git_links.push("https://aur.archlinux.org/piow-bin.git".to_owned());
         prepair_aur_test_dir(tmp_path, &git_links);
-        
+
         let dirs = get_dirs(&Path::new(tmp_path), true);
         assert!(dirs.is_ok());
 
