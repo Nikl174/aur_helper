@@ -18,68 +18,222 @@ use std::str::from_utf8;
 // aur_helper build [dir]
 // ? aur_helper install [dir]
 // clap for cli tool
+// TODO: error output improve
+// TODO: improve code-structure
 fn main() {
-    // let mut args = env::args();
-    // // skip programm name
-    // args.next();
-    // let dir = args.next();
-    //
-    // let path = match dir {
-    //     Some(x) => x,
-    //     None => {
-    //         println!("No argument provided!");
-    //         return;
-    //     }
-    // };
-    //
-    // let mut dirs: Vec<PathBuf> = Vec::new();
-    // match get_dirs(Path::new(&path), true) {
-    //     Ok(x) => {
-    //         for i in &x {
-    //             let p = i.to_str().unwrap();
-    //             println!("{p}");
-    //         }
-    //         dirs = x;
-    //     }
-    //     Err(x) => println!("Error: {}", x),
-    // }
-    // match update_packages(dirs.clone()) {
-    //     Ok(vec) => {
-    //         for x in dirs {
-    //             if vec.contains(&x) {
-    //                 println!("Updated package: {}", x.to_str().unwrap());
-    //             }
-    //             // println!("Package {} already up to date", x.0.to_str().unwrap());
-    //         }
-    //     }
-    //     Err(vec) => {
-    //         for x in vec {
-    //             println!(
-    //                 "Couldn't update package {}, failed with error {}",
-    //                 x.0.to_str().unwrap(),
-    //                 x.1.to_string()
-    //             )
-    //         }
-    //     }
-    // }
+    let command = cli().get_matches();
+
+    let path_str = command
+        .get_one::<String>("AUR_PATH")
+        .expect("AUR_PATH argument is required but not found!");
+
+    let dirs = match get_dirs(Path::new(path_str), true) {
+        Ok(dirs) => dirs,
+        Err(err) => {
+            println!(
+                "Couldn't get the aur directory paths because of this error:\n {}",
+                err
+            );
+            return;
+        }
+    };
+
+    match command.subcommand() {
+        Some(("update", sub_matches)) => {
+            let build = sub_matches.get_flag("build");
+            let install = sub_matches.get_flag("install");
+            let updated_dirs = update_packages(dirs);
+
+            let updated_dirs = match updated_dirs {
+                Ok(paths) => paths,
+                Err(err_paths) => {
+                    println!("ERROR in paths: \n {:?}", err_paths);
+                    // TODO: ask if you want to continue
+                    return;
+                }
+            };
+            println!("Updated packages: \n {:?}", updated_dirs);
+
+            if build {
+                let build_pkgs = build_packages(updated_dirs);
+                let build_pkgs = match build_pkgs {
+                    Ok(paths) => paths,
+                    Err(err_paths) => {
+                        println!("ERROR building some packages: \n {:?}", err_paths);
+                        // TODO: ask if you want to continue
+                        return;
+                    }
+                };
+
+                if install {
+                    let install_cmd = install_packages(build_pkgs);
+                    let mut install_cmd = match install_cmd {
+                        Ok(cmd) => cmd,
+                        Err((cmd, err_paths)) => {
+                            println!(
+                                "Error on some Packages (not found or a read error): \n {:?}",
+                                err_paths
+                            );
+                            // TODO: ask if you want to continue
+                            return;
+                        }
+                    };
+                    println!("Calling the following command: \n {:?}\n", install_cmd);
+                    match confirm_ask() {
+                        Ok(_) => {
+                            install_cmd.status().expect("Error calling pacman");
+                        }
+                        Err(_) => return,
+                    }
+                }
+            }
+        }
+        Some(("build", sub_matches)) => {
+            let install = sub_matches.get_flag("install");
+
+            let build_pkgs = build_packages(dirs);
+            let build_pkgs = match build_pkgs {
+                Ok(paths) => paths,
+                Err(err_paths) => {
+                    println!("ERROR building some packages: \n {:?}", err_paths);
+                    // TODO: ask if you want to continue
+                    return;
+                }
+            };
+            if install {
+                let install_cmd = install_packages(build_pkgs);
+                let mut install_cmd = match install_cmd {
+                    Ok(cmd) => cmd,
+                    Err((cmd, err_paths)) => {
+                        println!(
+                            "Error on some Packages (not found or a read error): \n {:?}",
+                            err_paths
+                        );
+                        // TODO: ask if you want to continue
+                        return;
+                    }
+                };
+                println!("Calling the following command: \n {:?}\n", install_cmd);
+                match confirm_ask() {
+                    Ok(_) => {
+                        install_cmd.status().expect("Error calling pacman");
+                    }
+                    Err(_) => return,
+                }
+            }
+        }
+        Some(("install", sub_matches)) => {
+            let install_cmd = install_packages(dirs);
+            let mut install_cmd = match install_cmd {
+                Ok(cmd) => cmd,
+                Err((cmd, err_paths)) => {
+                    println!(
+                        "Error on some Packages (not found or a read error): \n {:?}",
+                        err_paths
+                    );
+                    // TODO: ask if you want to continue
+                    return;
+                }
+            };
+            println!("Calling the following command: \n {:?}\n", install_cmd);
+            match confirm_ask() {
+                Ok(_) => {
+                    install_cmd.status().expect("Error calling pacman");
+                }
+                Err(_) => return,
+            }
+        }
+        Some(("check", sub_matches)) => {
+            let remove = sub_matches.get_flag("remove");
+            let inst_pkgs = check_installed(dirs.clone());
+            let mut dirs_set: HashSet<PathBuf> = dirs.clone().into_iter().collect();
+            println!("\nPackages installed: \n");
+            for dir in inst_pkgs.expect("Io error occured on checking files") {
+                dirs_set.remove(&dir);
+                println!(
+                    "{}",
+                    dir.file_name()
+                        .expect("couldn't get filename!")
+                        .to_str()
+                        .unwrap()
+                )
+            }
+            println!("\nPackages in directory and not installed: \n");
+            for dir in dirs_set.clone() {
+                println!(
+                    "{}",
+                    dir.file_name()
+                        .expect("couldn't get filename!")
+                        .to_str()
+                        .unwrap()
+                )
+            }
+            if remove {
+                let dirs = dirs_set.into_iter().collect();
+                let cmd = remove_uninstalled_dirs(dirs);
+                match cmd {
+                    Some(mut c) => {
+                        print!("Calling: \n{}", c.get_program().to_str().unwrap());
+                        for arg in c.get_args() {
+                            print!(" {}", arg.to_str().unwrap());
+                        }
+                        match confirm_ask() {
+                            Ok(_) => {
+                                c.status().expect("error on removing");
+                            }
+                            Err(_) => return,
+                        }
+                    }
+                    None => {
+                        println!("No unused directory, everything is installed")
+                    }
+                }
+            }
+        }
+        Some((cmd, sub_matches)) => {
+            println!("Unknown command '{cmd} {:?}'", sub_matches);
+        }
+        _ => unreachable!(),
+    }
 }
+
+fn confirm_ask() -> Result<(), ()> {
+    println!("Ready to continue? [Y|n]");
+    let mut input = String::new();
+    io::stdin().read_line(&mut input);
+
+    if input == "\n" || input == "Y" {
+        return Ok(());
+    } else {
+        println!("Aborting");
+        return Err(());
+    }
+}
+
 // build the CLI with clap, -> pacman as inspiration
 fn cli() -> clap::Command {
     let cmd = clap::Command::new("aur_helper")
         .about("a simple aur package helper for updating, building and installing AUR packages in a directory");
-    cmd.subcommand(
+    cmd.arg(arg!(<AUR_PATH> "The path to the aur-directories"),)
+    .arg_required_else_help(true)
+    .subcommand_required(true)
+    .subcommand(
         clap::Command::new("update")
             .short_flag('U')
             .about("updates the git repos in the directory")
             .arg(
                 Arg::new("build")
                     .short('b')
+                    .action(clap::ArgAction::SetTrue)
                     .help("builds the updated packages"),
             )
             .arg(
-                Arg::new("install").short('i').help(
-                    "generates the pacman command and installs the build packages, CALLS SUDO!",
-                ),
+                Arg::new("install")
+                    .short('i')
+                    .action(clap::ArgAction::SetTrue)
+                    .help(
+                        "generates the pacman command and installs the build packages, CALLS SUDO!",
+                    ),
             ),
     )
     .subcommand(
@@ -87,9 +241,12 @@ fn cli() -> clap::Command {
             .short_flag('B')
             .about("builds the packages recursively")
             .arg(
-                Arg::new("install").short('i').help(
-                    "generates the pacman command and installs the build packages, CALLS SUDO!",
-                ),
+                Arg::new("install")
+                    .short('i')
+                    .action(clap::ArgAction::SetTrue)
+                    .help(
+                        "generates the pacman command and installs the build packages, CALLS SUDO!",
+                    ),
             ),
     )
     .subcommand(
@@ -97,9 +254,54 @@ fn cli() -> clap::Command {
             "generates the pacman command and installs the LAST BUILD packages, CALLS SUDO!",
         ),
     )
-    .arg(arg!(<AUR_PATH> "The path to the aur-directories"))
-    .arg_required_else_help(true)
-    .subcommand_required(true)
+    .subcommand(
+        clap::Command::new("check")
+            .short_flag('C')
+            .about("checks, which packages are actually installed")
+            .arg(
+                Arg::new("remove")
+                    .short('r')
+                    .action(clap::ArgAction::SetTrue)
+                    .help("removes the not installed directorys from the aur"),
+            ),
+    )
+    // .subcommand(
+    //     clap::Command::new("remove")
+    //         .short_flag('R')
+    //         .about("removed not installed directory from the aur-directory"),
+    // )
+}
+
+fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
+    // TODO: ask major, why let rm_cmd = Command::new().arg().arg(); not work...
+    let mut rm_cmd = Command::new("rm");
+    rm_cmd.arg("-R").arg("-f");
+    if paths.is_empty() {
+        return None;
+    }
+    for path in paths {
+        rm_cmd.arg(path.to_str().unwrap());
+    }
+    Some(rm_cmd)
+}
+
+fn check_installed(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
+    let mut found_pgks: Vec<PathBuf> = Vec::new();
+
+    for path in paths {
+        let status = Command::new("pacman")
+            .arg("-Q")
+            .arg(
+                path.file_name()
+                    .expect("couldn't get a filename -> maybe got . or .."),
+            )
+            .output()?
+            .status;
+        if status.success() {
+            found_pgks.push(path);
+        }
+    }
+    Ok(found_pgks)
 }
 
 // fn install_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<PathBuf>> {
