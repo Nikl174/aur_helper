@@ -1,5 +1,7 @@
 use clap::Arg;
 use clap::{arg, Parser, Subcommand};
+use std::borrow::BorrowMut;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::fs::read_dir;
@@ -374,7 +376,7 @@ fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
         let mut min_modified = min.metadata()?.modified().unwrap();
         for file in possible_packages {
             let file_modifed = file.metadata()?.modified().unwrap(); // unwrap because it is always available in linux
-            if file_modifed < min_modified {
+            if file_modifed > min_modified {
                 min = file;
                 min_modified = file_modifed;
             };
