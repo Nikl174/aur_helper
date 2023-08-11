@@ -1,19 +1,7 @@
-use clap::Arg;
-use clap::{arg, Parser, Subcommand};
-use std::borrow::BorrowMut;
-use std::collections::HashSet;
-use std::env;
-use std::fs;
-use std::fs::read_dir;
-use std::fs::DirEntry;
-use std::fs::ReadDir;
-use std::io;
-use std::iter;
 use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::ExitStatus;
-use std::str::from_utf8;
+
+mod cli;
+mod dir_func;
 
 // TODO:
 // aur_helper update [dir]
@@ -23,13 +11,13 @@ use std::str::from_utf8;
 // TODO: error output improve
 // TODO: improve code-structure
 fn main() {
-    let command = cli().get_matches();
+    let command = cli::create_cli().get_matches();
 
     let path_str = command
         .get_one::<String>("AUR_PATH")
         .expect("AUR_PATH argument is required but not found!");
 
-    let dirs = match get_dirs(Path::new(path_str), true) {
+    let dirs = match dir_func::get_dirs(Path::new(path_str), true) {
         Ok(dirs) => dirs,
         Err(err) => {
             println!(
@@ -44,417 +32,27 @@ fn main() {
         Some(("update", sub_matches)) => {
             let build = sub_matches.get_flag("build");
             let install = sub_matches.get_flag("install");
-            let updated_dirs = update_packages(dirs);
 
-            let updated_dirs = match updated_dirs {
-                Ok(paths) => paths,
-                Err(err_paths) => {
-                    println!("ERROR in paths: \n {:?}", err_paths);
-                    // TODO: ask if you want to continue
-                    return;
-                }
-            };
-            println!("Updated packages: \n {:?}", updated_dirs);
-
-            if build {
-                let build_pkgs = build_packages(updated_dirs);
-                let build_pkgs = match build_pkgs {
-                    Ok(paths) => paths,
-                    Err(err_paths) => {
-                        println!("ERROR building some packages: \n {:?}", err_paths);
-                        // TODO: ask if you want to continue
-                        return;
-                    }
-                };
-
-                if install {
-                    let install_cmd = install_packages(build_pkgs);
-                    let mut install_cmd = match install_cmd {
-                        Ok(cmd) => cmd,
-                        Err((cmd, err_paths)) => {
-                            println!(
-                                "Error on some Packages (not found or a read error): \n {:?}",
-                                err_paths
-                            );
-                            // TODO: ask if you want to continue
-                            return;
-                        }
-                    };
-                    println!("Calling the following command: \n {:?}\n", install_cmd);
-                    match confirm_ask() {
-                        Ok(_) => {
-                            install_cmd.status().expect("Error calling pacman");
-                        }
-                        Err(_) => return,
-                    }
-                }
-            }
+            cli::update_cli(dirs, build, install);
         }
         Some(("build", sub_matches)) => {
             let install = sub_matches.get_flag("install");
 
-            let build_pkgs = build_packages(dirs);
-            let build_pkgs = match build_pkgs {
-                Ok(paths) => paths,
-                Err(err_paths) => {
-                    println!("ERROR building some packages: \n {:?}", err_paths);
-                    // TODO: ask if you want to continue
-                    return;
-                }
-            };
-            if install {
-                let install_cmd = install_packages(build_pkgs);
-                let mut install_cmd = match install_cmd {
-                    Ok(cmd) => cmd,
-                    Err((cmd, err_paths)) => {
-                        println!(
-                            "Error on some Packages (not found or a read error): \n {:?}",
-                            err_paths
-                        );
-                        // TODO: ask if you want to continue
-                        return;
-                    }
-                };
-                println!("Calling the following command: \n {:?}\n", install_cmd);
-                match confirm_ask() {
-                    Ok(_) => {
-                        install_cmd.status().expect("Error calling pacman");
-                    }
-                    Err(_) => return,
-                }
-            }
+            cli::build_cli(dirs, install);
         }
-        Some(("install", sub_matches)) => {
-            let install_cmd = install_packages(dirs);
-            let mut install_cmd = match install_cmd {
-                Ok(cmd) => cmd,
-                Err((cmd, err_paths)) => {
-                    println!(
-                        "Error on some Packages (not found or a read error): \n {:?}",
-                        err_paths
-                    );
-                    // TODO: ask if you want to continue
-                    return;
-                }
-            };
-            println!("Calling the following command: \n {:?}\n", install_cmd);
-            match confirm_ask() {
-                Ok(_) => {
-                    install_cmd.status().expect("Error calling pacman");
-                }
-                Err(_) => return,
-            }
+        Some(("install", _sub_matches)) => {
+            cli::install_cli(dirs);
         }
         Some(("check", sub_matches)) => {
             let remove = sub_matches.get_flag("remove");
-            let inst_pkgs = check_installed(dirs.clone());
-            let mut dirs_set: HashSet<PathBuf> = dirs.clone().into_iter().collect();
-            println!("\nPackages installed: \n");
-            for dir in inst_pkgs.expect("Io error occured on checking files") {
-                dirs_set.remove(&dir);
-                println!(
-                    "{}",
-                    dir.file_name()
-                        .expect("couldn't get filename!")
-                        .to_str()
-                        .unwrap()
-                )
-            }
-            println!("\nPackages in directory and not installed: \n");
-            for dir in dirs_set.clone() {
-                println!(
-                    "{}",
-                    dir.file_name()
-                        .expect("couldn't get filename!")
-                        .to_str()
-                        .unwrap()
-                )
-            }
-            if remove {
-                let dirs = dirs_set.into_iter().collect();
-                let cmd = remove_uninstalled_dirs(dirs);
-                match cmd {
-                    Some(mut c) => {
-                        print!("Calling: \n{}", c.get_program().to_str().unwrap());
-                        for arg in c.get_args() {
-                            print!(" {}", arg.to_str().unwrap());
-                        }
-                        match confirm_ask() {
-                            Ok(_) => {
-                                c.status().expect("error on removing");
-                            }
-                            Err(_) => return,
-                        }
-                    }
-                    None => {
-                        println!("No unused directory, everything is installed")
-                    }
-                }
-            }
+
+            cli::check_cli(dirs, remove);
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);
         }
         _ => unreachable!(),
     }
-}
-
-fn confirm_ask() -> Result<(), ()> {
-    println!("Ready to continue? [Y|n]");
-    let mut input = String::new();
-    io::stdin().read_line(&mut input);
-
-    if input == "\n" || input == "Y" {
-        return Ok(());
-    } else {
-        println!("Aborting");
-        return Err(());
-    }
-}
-
-// build the CLI with clap, -> pacman as inspiration
-fn cli() -> clap::Command {
-    let cmd = clap::Command::new("aur_helper")
-        .about("a simple aur package helper for updating, building and installing AUR packages in a directory");
-    cmd.arg(arg!(<AUR_PATH> "The path to the aur-directories"),)
-    .arg_required_else_help(true)
-    .subcommand_required(true)
-    .subcommand(
-        clap::Command::new("update")
-            .short_flag('U')
-            .about("updates the git repos in the directory")
-            .arg(
-                Arg::new("build")
-                    .short('b')
-                    .action(clap::ArgAction::SetTrue)
-                    .help("builds the updated packages"),
-            )
-            .arg(
-                Arg::new("install")
-                    .short('i')
-                    .action(clap::ArgAction::SetTrue)
-                    .help(
-                        "generates the pacman command and installs the build packages, CALLS SUDO!",
-                    ),
-            ),
-    )
-    .subcommand(
-        clap::Command::new("build")
-            .short_flag('B')
-            .about("builds the packages recursively")
-            .arg(
-                Arg::new("install")
-                    .short('i')
-                    .action(clap::ArgAction::SetTrue)
-                    .help(
-                        "generates the pacman command and installs the build packages, CALLS SUDO!",
-                    ),
-            ),
-    )
-    .subcommand(
-        clap::Command::new("install").short_flag('I').about(
-            "generates the pacman command and installs the LAST BUILD packages, CALLS SUDO!",
-        ),
-    )
-    .subcommand(
-        clap::Command::new("check")
-            .short_flag('C')
-            .about("checks, which packages are actually installed")
-            .arg(
-                Arg::new("remove")
-                    .short('r')
-                    .action(clap::ArgAction::SetTrue)
-                    .help("removes the not installed directorys from the aur"),
-            ),
-    )
-    // .subcommand(
-    //     clap::Command::new("remove")
-    //         .short_flag('R')
-    //         .about("removed not installed directory from the aur-directory"),
-    // )
-}
-
-fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
-    // TODO: ask major, why let rm_cmd = Command::new().arg().arg(); not work...
-    let mut rm_cmd = Command::new("rm");
-    rm_cmd.arg("-R").arg("-f");
-    if paths.is_empty() {
-        return None;
-    }
-    for path in paths {
-        rm_cmd.arg(path.to_str().unwrap());
-    }
-    Some(rm_cmd)
-}
-
-fn check_installed(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
-    let mut found_pgks: Vec<PathBuf> = Vec::new();
-
-    for path in paths {
-        let status = Command::new("pacman")
-            .arg("-Q")
-            .arg(
-                path.file_name()
-                    .expect("couldn't get a filename -> maybe got . or .."),
-            )
-            .output()?
-            .status;
-        if status.success() {
-            found_pgks.push(path);
-        }
-    }
-    Ok(found_pgks)
-}
-
-// fn install_packages(dirs: &Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<PathBuf>> {
-fn install_packages(dirs: Vec<PathBuf>) -> Result<Command, (Command, Vec<PathBuf>)> {
-    let mut failed_packges: Vec<PathBuf> = Vec::new();
-    let mut packages: Vec<PathBuf> = Vec::new();
-    for dir in dirs {
-        match fs::read_dir(dir.clone()) {
-            Ok(read_dir) => {
-                let files = get_latest_build_package(read_dir);
-                match files {
-                    Ok(path_buf) => {
-                        packages.push(path_buf);
-                    }
-                    Err(e) => {
-                        println!("WARNING: couldn't find a build package, error: {}", e);
-                        failed_packges.push(dir.to_path_buf());
-                    }
-                }
-            }
-            Err(_) => {
-                failed_packges.push(dir.to_path_buf());
-            }
-        }
-    }
-    let mut inst_cmd = Command::new("sudo");
-    inst_cmd.arg("pacman");
-    inst_cmd.arg("-U");
-    for package in packages {
-        inst_cmd.arg(package.to_str().expect("Couldn't convert path to string"));
-    }
-    if failed_packges.is_empty() {
-        Ok(inst_cmd)
-    } else {
-        Err((inst_cmd, failed_packges))
-    }
-}
-
-// finds the build package-files in a directory and fails, if not file was found
-fn get_latest_build_package(dir: ReadDir) -> Result<PathBuf, io::Error> {
-    let mut possible_packages: Vec<DirEntry> = Vec::new();
-    for file_res in dir {
-        // TODO: better error handling
-        let file = file_res.expect("read_dir failed to retreave a file");
-        let file_metadata = file.metadata().expect("couldn't get metadata");
-        if file_metadata.is_file() {
-            let file_name = file
-                .file_name()
-                .into_string()
-                .expect("Failed to convert from OsString to String");
-            let file_name_slice: Vec<&str> = file_name.split(".").collect();
-            match file_name_slice.last() {
-                Some(last) => {
-                    if last == &"zst" {
-                        possible_packages.push(file);
-                    }
-                }
-                None => {}
-            }
-        }
-    }
-    if possible_packages.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Couldn't find a build package-file",
-        ));
-    } else {
-        // TODO: don't depend on metada, depend on pkg version name
-        let mut min: DirEntry = possible_packages.pop().unwrap();
-        let mut min_modified = min.metadata()?.modified().unwrap();
-        for file in possible_packages {
-            let file_modifed = file.metadata()?.modified().unwrap(); // unwrap because it is always available in linux
-            if file_modifed > min_modified {
-                min = file;
-                min_modified = file_modifed;
-            };
-        }
-        return Ok(min.path());
-    }
-}
-
-// build all packages in dir, returns build packages of on err the failed packages and the status
-fn build_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
-    let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
-    let mut success_dirs: Vec<PathBuf> = Vec::new();
-    for dir in dirs {
-        let status = Command::new("makepkg")
-            .current_dir(dir.clone())
-            .status()
-            .expect("Failed to execute makepkg");
-        if status.success() {
-            success_dirs.push(dir.clone());
-        } else {
-            failed_dirs.push((dir.clone(), status));
-        }
-    }
-    if failed_dirs.is_empty() {
-        return Ok(success_dirs);
-    }
-    Err(failed_dirs)
-}
-
-// goes through the directories and calls 'git pull' and returns a tuple vector of successful updated
-// dirs and on fail a vector of the failed dirs and their  the exit status
-fn update_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, ExitStatus)>> {
-    let mut failed_dirs: Vec<(PathBuf, ExitStatus)> = Vec::new();
-    let mut true_success_dirs: Vec<PathBuf> = Vec::new();
-    for dir in dirs {
-        let output = Command::new("git")
-            .arg("pull")
-            .current_dir(dir.clone())
-            .output()
-            .expect("Failed to execute git pull!");
-
-        if output.status.success() {
-            if !(from_utf8(output.stdout.as_slice()).unwrap() == "Already up to date.\n") {
-                true_success_dirs.push(dir.clone());
-            }
-        } else {
-            failed_dirs.push((dir.clone(), output.status));
-        }
-    }
-    if failed_dirs.is_empty() {
-        return Ok(true_success_dirs);
-    }
-    Err(failed_dirs)
-}
-
-// returns the directories in path and warns if it's a wrong directory
-fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, io::Error> {
-    let mut paths: Vec<PathBuf> = Vec::new();
-    if !current_path.is_dir() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Given Path is not a directory!",
-        ));
-    }
-
-    for path in fs::read_dir(current_path).expect("Couldn't read path!") {
-        let dir_ent = path.expect("Dir-entry error!").path();
-
-        if warn_wrong_dir && !dir_ent.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "AUR Path contains not only directorys, right AUR-dir?",
-            ));
-        }
-
-        paths.push(dir_ent);
-    }
-    Ok(paths)
 }
 
 #[cfg(test)]
@@ -481,6 +79,13 @@ mod tests {
         );
         clean_up_tmp_dir(tmp_path);
     }
+
+    use std::{
+        iter,
+        path::{Path, PathBuf},
+        process::Command,
+        str::from_utf8,
+    };
 
     use super::*;
 
@@ -538,7 +143,7 @@ mod tests {
             .expect("Couldn't create subdirs in test");
 
         // TEST
-        let paths = get_dirs(Path::new("/tmp/aur_helper_rs_test/"), true);
+        let paths = dir_func::get_dirs(Path::new("/tmp/aur_helper_rs_test/"), true);
 
         assert!(paths.is_ok());
 
@@ -567,8 +172,8 @@ mod tests {
             .expect("Failed to touch a file in the test directory");
 
         // TEST
-        let err = get_dirs(Path::new(tmp_path), true);
-        let err2 = get_dirs(Path::new(test_file.as_str()), true);
+        let err = dir_func::get_dirs(Path::new(tmp_path), true);
+        let err2 = dir_func::get_dirs(Path::new(test_file.as_str()), true);
 
         assert!(err.is_err());
         assert!(err2.is_err());
@@ -598,11 +203,11 @@ mod tests {
             .arg(".")
             .status()
             .expect("Failed to restore the repo yofi-bin");
-        let dirs = get_dirs(Path::new(tmp_path), true);
+        let dirs = dir_func::get_dirs(Path::new(tmp_path), true);
         assert!(dirs.is_ok());
         let mut updated_dirs: Vec<PathBuf> = Vec::new();
         updated_dirs.push(Path::new(&update_dir_path).to_path_buf());
-        let success_dirs = update_packages(dirs.unwrap());
+        let success_dirs = dir_func::update_packages(dirs.unwrap());
         assert!(success_dirs.is_ok());
         for i in iter::zip(success_dirs.unwrap(), updated_dirs) {
             assert_eq!(i.0, i.1);
@@ -619,9 +224,9 @@ mod tests {
         git_links.push("https://aur.archlinux.org/yofi-bin".to_owned());
         prepair_aur_test_dir(tmp_path, &git_links);
 
-        let mut dirs = get_dirs(&Path::new(tmp_path), true);
+        let mut dirs = dir_func::get_dirs(&Path::new(tmp_path), true);
         assert!(dirs.is_ok());
-        let no_err = build_packages(dirs.unwrap());
+        let no_err = dir_func::build_packages(dirs.unwrap());
         assert!(no_err.is_ok());
 
         clean_up_tmp_dir(tmp_path);
@@ -631,9 +236,9 @@ mod tests {
 
         prepair_aur_test_dir(tmp_path, &git_links);
 
-        dirs = get_dirs(&Path::new(tmp_path), true);
+        dirs = dir_func::get_dirs(&Path::new(tmp_path), true);
         assert!(dirs.is_ok());
-        let err = build_packages(dirs.unwrap());
+        let err = dir_func::build_packages(dirs.unwrap());
         assert!(err.is_err());
 
         clean_up_tmp_dir(tmp_path);
@@ -648,17 +253,22 @@ mod tests {
         git_links.push("https://aur.archlinux.org/piow-bin.git".to_owned());
         prepair_aur_test_dir(tmp_path, &git_links);
 
-        let dirs = get_dirs(&Path::new(tmp_path), true);
+        let dirs = dir_func::get_dirs(&Path::new(tmp_path), true);
         assert!(dirs.is_ok());
 
         let dirs = dirs.unwrap();
 
-        let no_err = build_packages(dirs.clone());
+        let no_err = dir_func::build_packages(dirs.clone());
         assert!(no_err.is_ok());
 
-        let no_err = install_packages(dirs.clone());
+        let no_err = dir_func::install_packages(dirs.clone());
         assert!(no_err.is_ok());
 
         clean_up_tmp_dir(tmp_path);
+    }
+
+    #[test]
+    fn cli_test() {
+        cli::create_cli().debug_assert();
     }
 }
