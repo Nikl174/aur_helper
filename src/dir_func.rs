@@ -9,7 +9,6 @@ use std::process::ExitStatus;
 use std::str::from_utf8;
 
 pub fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
-    // TODO: ask major, why let rm_cmd = Command::new().arg().arg(); not work...
     let mut rm_cmd = Command::new("rm");
     rm_cmd.arg("-R").arg("-f");
     if paths.is_empty() {
