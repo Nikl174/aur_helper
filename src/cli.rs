@@ -96,14 +96,16 @@ pub fn update_cli(dirs: Vec<PathBuf>, build: bool, install: bool) {
         Ok(paths) => (paths, false),
         Err(err_paths) => {
             println!("ERROR in paths: \n {:?}\n", err_paths.clone());
-            (get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()), true)
+            (
+                get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()),
+                true,
+            )
         }
     };
     println!("Updated packages: \n {:?}", updated_dirs);
 
     if build {
         if err {
-            println!("Continue? [Y|n]");
             if confirm_ask().is_err() {
                 return;
             }
@@ -118,12 +120,14 @@ pub fn build_cli(dirs: Vec<PathBuf>, install: bool) {
         Ok(paths) => (paths, false),
         Err(err_paths) => {
             println!("ERROR building some packages: \n {:?}", err_paths);
-            (get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()), true)
+            (
+                get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()),
+                true,
+            )
         }
     };
     if install {
         if err {
-            println!("Continue? [Y|n]");
             if confirm_ask().is_err() {
                 return;
             }
