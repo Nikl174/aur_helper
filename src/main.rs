@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 mod cli;
 mod dir_func;
@@ -10,14 +10,15 @@ mod dir_func;
 // clap for cli tool
 // TODO: error output improve
 // TODO: improve code-structure
-fn main() {
+#[tokio::main]
+async fn main() {
     let command = cli::create_cli().get_matches();
 
-    let path_str = command
-        .get_one::<String>("AUR_PATH")
+    let path = command
+        .get_one::<PathBuf>("AUR_PATH")
         .expect("AUR_PATH argument is required but not found!");
 
-    let dirs = match dir_func::get_dirs(Path::new(path_str), true) {
+    let dirs = match dir_func::get_dirs(path, true) {
         Ok(dirs) => dirs,
         Err(err) => {
             println!(
@@ -47,6 +48,12 @@ fn main() {
             let remove = sub_matches.get_flag("remove");
 
             cli::check_cli(dirs, remove);
+        }
+        Some(("search", sub_matches)) => {
+            let search_name: &String = sub_matches
+                .get_one::<String>("search_name")
+                .expect("search_name argument required but couldn't get it");
+            cli::search_cli(search_name.to_owned()).await;
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);

@@ -1,55 +1,79 @@
 use std::{collections::HashSet, io, path::PathBuf};
 
 use crate::dir_func;
-use clap::{arg, Arg};
+use clap::Arg;
+use raur::Raur;
 
 // build the CLI with clap, -> pacman as inspiration
 pub fn create_cli() -> clap::Command {
+    // arguments
+    let remove_arg = Arg::new("remove")
+        .short('r')
+        .action(clap::ArgAction::SetTrue)
+        .help("removes the not installed directorys from the aur");
+
+    let build_arg = Arg::new("build")
+        .short('b')
+        .action(clap::ArgAction::SetTrue)
+        .help("builds the updated packages");
+
+    let install_arg = Arg::new("install")
+        .short('i')
+        .action(clap::ArgAction::SetTrue)
+        .help("generates the pacman command and installs the build packages, CALLS SUDO!");
+
+    let aur_path_arg = Arg::new("AUR_PATH")
+        .required(true)
+        .value_name("AUR_PATH")
+        .value_parser(clap::builder::PathBufValueParser::new())
+        .value_hint(clap::ValueHint::FilePath)
+        .help("The path to the aur-directories");
+
+    // end arguments
+    //
+    //
+    // subcommands
     let check = clap::Command::new("check")
         .short_flag('C')
         .about("checks, which packages are actually installed")
-        .arg(
-            Arg::new("remove")
-                .short('r')
-                .action(clap::ArgAction::SetTrue)
-                .help("removes the not installed directorys from the aur"),
-        );
+        .arg(remove_arg.clone());
     let install = clap::Command::new("install")
         .short_flag('I')
         .about("generates the pacman command and installs the LAST BUILD packages, CALLS SUDO!");
     let update = clap::Command::new("update")
         .short_flag('U')
         .about("updates the git repos in the directory")
-        .arg(
-            Arg::new("build")
-                .short('b')
-                .action(clap::ArgAction::SetTrue)
-                .help("builds the updated packages"),
-        )
-        .arg(
-            Arg::new("install")
-                .short('i')
-                .action(clap::ArgAction::SetTrue)
-                .help("generates the pacman command and installs the build packages, CALLS SUDO!"),
-        );
+        .arg(build_arg.clone())
+        .arg(install_arg.clone());
     let build = clap::Command::new("build")
         .short_flag('B')
         .about("builds the packages recursively")
+        .arg(install_arg.clone());
+    // TODO: optional: download after search and select afterward
+    let search = clap::Command::new("search")
+        .short_flag('S')
+        .about("searches for packages by a given name and shows informations about the package")
         .arg(
-            Arg::new("install")
-                .short('i')
-                .action(clap::ArgAction::SetTrue)
-                .help("generates the pacman command and installs the build packages, CALLS SUDO!"),
+            Arg::new("search_name")
+                .required(true)
+                .value_hint(clap::ValueHint::Other)
+                .action(clap::ArgAction::Set)
+                .value_parser(clap::builder::StringValueParser::new())
+                .help("a possible name of a package to search for")
+                .num_args(1),
         );
+    // end subcommands
+
     clap::Command::new("aur_helper")
             .about("a simple aur package helper for updating, building and installing AUR packages in a directory")
-            .arg(arg!(<AUR_PATH> "The path to the aur-directories"),)
+            .arg(aur_path_arg)
             .arg_required_else_help(true)
             .subcommand_required(true)
             .subcommand(update)
             .subcommand(build)
             .subcommand(install)
             .subcommand(check)
+            .subcommand(search)
 }
 // .subcommand(
 //     clap::Command::new("remove")
@@ -207,6 +231,52 @@ pub fn remove_cli(dirs: Vec<PathBuf>) {
         }
         None => {
             println!("No unused directory, everything is installed")
+        }
+    }
+}
+pub async fn search_cli(search_name: String) {
+    let raur_handler = raur::Handle::new();
+    match raur_handler.search(search_name.clone()).await {
+        Ok(pkg_vec) => {
+            for pkg in pkg_vec.clone() {
+                println!("----------------------------------");
+                println!(
+                    "Name: {}; Version: {}; Updated: {}",
+                    pkg.name, pkg.version, pkg.last_modified
+                );
+                println!(
+                    "Description: {}",
+                    pkg.description
+                        .unwrap_or("no description available".to_string())
+                );
+                println!(
+                    "Dependencies: \n runtime: {}, make: {}, check: {}, optional: {}",
+                    pkg.depends.len(),
+                    pkg.make_depends.len(),
+                    pkg.check_depends.len(),
+                    pkg.opt_depends.len()
+                );
+                // for dep in pkg.depends {
+                //     print!("{}; ",dep);
+                // }
+                // for dep in pkg.make_depends {
+                //     print!("{} [make]; ",dep);
+                // }
+                // for dep in pkg.opt_depends {
+                //     print!("{} [optional]; ",dep);
+                // }
+                // println!("");
+                println!(
+                    "Upstream: {}",
+                    pkg.url.unwrap_or("not available".to_string())
+                );
+                println!("Git Url: https://aur.archlinux.org/{}", pkg.package_base);
+                println!("==================================");
+            }
+            println!("Found {} packages", pkg_vec.len());
+        }
+        Err(err) => {
+            println!("Error while searching for {}: \n {}", search_name, err);
         }
     }
 }
