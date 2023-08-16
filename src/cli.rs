@@ -1,4 +1,8 @@
-use std::{collections::HashSet, io, path::PathBuf};
+use std::{
+    collections::HashSet,
+    io,
+    path::PathBuf,
+};
 
 use crate::dir_func;
 use clap::Arg;
@@ -236,44 +240,20 @@ pub fn remove_cli(dirs: Vec<PathBuf>) {
 }
 pub async fn search_cli(search_name: String) {
     let raur_handler = raur::Handle::new();
-    match raur_handler.search(search_name.clone()).await {
+    match raur_handler.info(&[search_name.clone()]).await {
         Ok(pkg_vec) => {
-            for pkg in pkg_vec.clone() {
-                println!("----------------------------------");
-                println!(
-                    "Name: {}; Version: {}; Updated: {}",
-                    pkg.name, pkg.version, pkg.last_modified
-                );
-                println!(
-                    "Description: {}",
-                    pkg.description
-                        .unwrap_or("no description available".to_string())
-                );
-                println!(
-                    "Dependencies: \n runtime: {}, make: {}, check: {}, optional: {}",
-                    pkg.depends.len(),
-                    pkg.make_depends.len(),
-                    pkg.check_depends.len(),
-                    pkg.opt_depends.len()
-                );
-                // for dep in pkg.depends {
-                //     print!("{}; ",dep);
-                // }
-                // for dep in pkg.make_depends {
-                //     print!("{} [make]; ",dep);
-                // }
-                // for dep in pkg.opt_depends {
-                //     print!("{} [optional]; ",dep);
-                // }
-                // println!("");
-                println!(
-                    "Upstream: {}",
-                    pkg.url.unwrap_or("not available".to_string())
-                );
-                println!("Git Url: https://aur.archlinux.org/{}", pkg.package_base);
-                println!("==================================");
-            }
-            println!("Found {} packages", pkg_vec.len());
+            let pkg = match pkg_vec.first() {
+                Some(p) => p,
+                None => {
+                    println!(
+                        "Couldn't find a package named '{}', try -Ss.",
+                        search_name.clone()
+                    );
+                    return;
+                }
+            };
+            let pkg = pkg.clone();
+            dir_func::print_detailed_pkg_info(pkg);
         }
         Err(err) => {
             println!("Error while searching for {}: \n {}", search_name, err);

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::str::from_utf8;
+use std::time::Duration;
+use std::time::SystemTime;
 
 pub fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
     let mut rm_cmd = Command::new("rm");
@@ -189,4 +191,55 @@ pub fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf
         paths.push(dir_ent);
     }
     Ok(paths)
+}
+
+pub fn print_detailed_pkg_info(pkg: raur::Package) {
+    // ------ calculate time
+    let last_mod = Duration::new(pkg.last_modified.unsigned_abs(), 0);
+    let last_mod = SystemTime::now() - last_mod;
+    // last_mod is SystemTime, convert SystemTime to unix time
+    let last_mod = last_mod
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Negative result on duration calculation");
+
+    let days = last_mod.as_secs() / (60 * 60 * 24);
+
+    let last_mod = match days {
+        0 => format!("today"),
+        1 => format!("before {} day", days),
+        2..=31 => format!("before {} days", days),
+        32..=365 => format!("before {} months", (days / 31)),
+        _ => format!("before {} years", (days / 365)),
+    };
+
+    // ------ format print
+    println!("----------------------------------");
+    println!(
+        "Name: {}; Version: {}; Updated: {}",
+        pkg.name, pkg.version, last_mod
+    );
+    println!(
+        "Description: {}",
+        pkg.description
+            .unwrap_or("no description available".to_string())
+    );
+    let dep = pkg.depends.iter();
+    let mdep = pkg.make_depends.iter();
+    let odep = pkg.opt_depends.iter();
+    let big_dep = dep.zip(mdep).zip(odep); // hehe ;)
+
+    println!(
+        "{: <20} | {: <20} | {: <20}",
+        "[Runtime]", "[Make]", "[Optional]"
+    );
+    for ((d, md), od) in big_dep {
+        println!("{: <20} | {: <20} | {: <20}", d, md, od);
+    }
+    println!("");
+    println!(
+        "Upstream: {}",
+        pkg.url.unwrap_or("not available".to_string())
+    );
+    println!("Git Url: https://aur.archlinux.org/{}", pkg.package_base);
+    println!("==================================");
 }
