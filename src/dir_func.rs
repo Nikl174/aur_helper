@@ -213,7 +213,6 @@ pub fn print_detailed_pkg_info(pkg: raur::Package) {
     };
 
     // ------ format print
-    println!("----------------------------------");
     println!(
         "Name: {}; Version: {}; Updated: {}",
         pkg.name, pkg.version, last_mod
@@ -241,5 +240,14 @@ pub fn print_detailed_pkg_info(pkg: raur::Package) {
         pkg.url.unwrap_or("not available".to_string())
     );
     println!("Git Url: https://aur.archlinux.org/{}", pkg.package_base);
+}
+
+pub fn print_simple_pkg_info(pkg: raur::Package) {
+    println!("Name: {}; Popularity: {}", pkg.name, pkg.popularity);
+    println!(
+        "Description: {}",
+        pkg.description
+            .unwrap_or("no description available".to_string())
+    );
     println!("==================================");
 }

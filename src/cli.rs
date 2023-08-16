@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    io,
-    path::PathBuf,
-};
+use std::{collections::HashSet, io, path::PathBuf};
 
 use crate::dir_func;
 use clap::Arg;
@@ -32,6 +28,11 @@ pub fn create_cli() -> clap::Command {
         .value_parser(clap::builder::PathBufValueParser::new())
         .value_hint(clap::ValueHint::FilePath)
         .help("The path to the aur-directories");
+
+    let search_arg = Arg::new("search")
+        .short('s')
+        .action(clap::ArgAction::SetTrue)
+        .help("extended search for package name and description");
 
     // end arguments
     //
@@ -63,9 +64,10 @@ pub fn create_cli() -> clap::Command {
                 .value_hint(clap::ValueHint::Other)
                 .action(clap::ArgAction::Set)
                 .value_parser(clap::builder::StringValueParser::new())
-                .help("a possible name of a package to search for")
+                .help("a package name to search for")
                 .num_args(1),
-        );
+        )
+        .arg(search_arg);
     // end subcommands
 
     clap::Command::new("aur_helper")
@@ -238,25 +240,39 @@ pub fn remove_cli(dirs: Vec<PathBuf>) {
         }
     }
 }
-pub async fn search_cli(search_name: String) {
+pub async fn search_cli(search_name: String, ext_search: bool) {
     let raur_handler = raur::Handle::new();
-    match raur_handler.info(&[search_name.clone()]).await {
-        Ok(pkg_vec) => {
-            let pkg = match pkg_vec.first() {
-                Some(p) => p,
-                None => {
-                    println!(
-                        "Couldn't find a package named '{}', try -Ss.",
-                        search_name.clone()
-                    );
-                    return;
+    if ext_search {
+        match raur_handler.search(search_name.clone()).await {
+            Ok(pkg_vec) => {
+                for pkg in pkg_vec {
+                    dir_func::print_simple_pkg_info(pkg);
                 }
-            };
-            let pkg = pkg.clone();
-            dir_func::print_detailed_pkg_info(pkg);
+            },
+            Err(err) => {
+                println!("Error while searching for {}: \n {}", search_name, err);
+            }
         }
-        Err(err) => {
-            println!("Error while searching for {}: \n {}", search_name, err);
+    } else {
+        match raur_handler.info(&[search_name.clone()]).await {
+            Ok(pkg_vec) => {
+                println!("Pkg_vec len {}", pkg_vec.len());
+                let pkg = match pkg_vec.first() {
+                    Some(p) => p,
+                    None => {
+                        println!(
+                            "Couldn't find a package named '{}', try -Ss.",
+                            search_name.clone()
+                        );
+                        return;
+                    }
+                };
+                let pkg = pkg.clone();
+                dir_func::print_detailed_pkg_info(pkg);
+            }
+            Err(err) => {
+                println!("Error while searching for {}: \n {}", search_name, err);
+            }
         }
     }
 }

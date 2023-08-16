@@ -50,10 +50,11 @@ async fn main() {
             cli::check_cli(dirs, remove);
         }
         Some(("search", sub_matches)) => {
+            let ext_search = sub_matches.get_flag("search");
             let search_name: &String = sub_matches
                 .get_one::<String>("search_name")
                 .expect("search_name argument required but couldn't get it");
-            cli::search_cli(search_name.to_owned()).await;
+            cli::search_cli(search_name.to_owned(), ext_search).await;
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);
