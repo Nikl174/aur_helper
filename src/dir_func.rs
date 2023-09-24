@@ -171,6 +171,7 @@ pub fn update_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf,
 // returns the directories in path and warns if it's a wrong directory
 pub fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, io::Error> {
     let mut paths: Vec<PathBuf> = Vec::new();
+    println!("{:?}",current_path.canonicalize());
     if !current_path.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,

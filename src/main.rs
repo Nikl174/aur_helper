@@ -12,11 +12,13 @@ mod dir_func;
 // TODO: improve code-structure
 #[tokio::main]
 async fn main() {
-    let command = cli::create_cli().get_matches();
+    let command = cli::Cli::new().get_matches_cli();
 
     let path = command
         .get_one::<PathBuf>("AUR_PATH")
         .expect("AUR_PATH argument is required but not found!");
+    println!("{:?}", path);
+
 
     let dirs = match dir_func::get_dirs(path, true) {
         Ok(dirs) => dirs,
@@ -277,6 +279,6 @@ mod tests {
 
     #[test]
     fn cli_test() {
-        cli::create_cli().debug_assert();
+        cli::get_matches_cli().debug_assert();
     }
 }
