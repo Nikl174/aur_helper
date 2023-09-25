@@ -22,7 +22,7 @@ async fn main() {
         Ok(dirs) => dirs,
         Err(err) => {
             println!(
-                "Couldn't get the aur directory paths because of this error:\n {}",
+                "WARNING: Couldn't get the aur directory paths because of this error:\n {}",
                 err
             );
             return;
@@ -31,30 +31,19 @@ async fn main() {
 
     match command_matches.subcommand() {
         Some(("update", sub_matches)) => {
-            let build = sub_matches.get_flag("build");
-            let install = sub_matches.get_flag("install");
-
-            cli::update_cli(dirs, build, install);
+            cli::update_command(dirs, sub_matches.to_owned());
         }
         Some(("build", sub_matches)) => {
-            let install = sub_matches.get_flag("install");
-
-            cli::build_cli(dirs, install);
+            cli::build_command(dirs, sub_matches.to_owned());
         }
         Some(("install", _sub_matches)) => {
-            cli::install_cli(dirs);
+            cli::install_command(dirs);
         }
         Some(("check", sub_matches)) => {
-            let remove = sub_matches.get_flag("remove");
-
-            cli::check_cli(dirs, remove);
+            cli::check_command(dirs, sub_matches.to_owned());
         }
         Some(("search", sub_matches)) => {
-            let ext_search = sub_matches.get_flag("search");
-            let search_name: &String = sub_matches
-                .get_one::<String>("search_name")
-                .expect("search_name argument required but couldn't get it");
-            cli::search_cli(search_name.to_owned(), ext_search).await;
+            cli::search_command(sub_matches.to_owned()).await;
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);
@@ -277,6 +266,6 @@ mod tests {
 
     #[test]
     fn cli_test() {
-        cli::get_matches_cli().debug_assert();
+        cli::Cli::new().get_cli_command().debug_assert();
     }
 }

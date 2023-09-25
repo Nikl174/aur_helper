@@ -138,6 +138,7 @@ fn confirm_ask() -> Result<(), ()> {
     }
 }
 
+// helper function to get the diff between a bigger and a set that is contained in the bigger one
 fn get_set_diff(bigger_dir: Vec<PathBuf>, containing_dir: Vec<PathBuf>) -> Vec<PathBuf> {
     let bigger_set: HashSet<PathBuf> = bigger_dir.into_iter().collect();
     let containing_set: HashSet<PathBuf> = containing_dir.into_iter().collect();
@@ -150,8 +151,9 @@ fn get_set_diff(bigger_dir: Vec<PathBuf>, containing_dir: Vec<PathBuf>) -> Vec<P
     return diff.into_iter().collect();
 }
 
-pub fn update_cli(dirs: Vec<PathBuf>, build: bool, install: bool) {
+pub fn update_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
     let updated_dirs = dir_func::update_packages(dirs.clone());
+    let build = sub_matches.get_flag("build");
 
     let (updated_dirs, err) = match updated_dirs {
         Ok(paths) => (paths, false),
@@ -171,12 +173,14 @@ pub fn update_cli(dirs: Vec<PathBuf>, build: bool, install: bool) {
                 return;
             }
         }
-        build_cli(updated_dirs, install);
+        build_command(updated_dirs, sub_matches);
     }
 }
 
-pub fn build_cli(dirs: Vec<PathBuf>, install: bool) {
+pub fn build_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
     let build_pkgs = dir_func::build_packages(dirs.clone());
+    let install = sub_matches.get_flag("install");
+
     let (build_pkgs, err) = match build_pkgs {
         Ok(paths) => (paths, false),
         Err(err_paths) => {
@@ -193,11 +197,11 @@ pub fn build_cli(dirs: Vec<PathBuf>, install: bool) {
                 return;
             }
         }
-        install_cli(build_pkgs);
+        install_command(build_pkgs);
     }
 }
 
-pub fn install_cli(dirs: Vec<PathBuf>) {
+pub fn install_command(dirs: Vec<PathBuf>) {
     let install_cmd = dir_func::install_packages(dirs);
     let mut install_cmd = match install_cmd {
         Ok(cmd) => cmd,
@@ -221,8 +225,10 @@ pub fn install_cli(dirs: Vec<PathBuf>) {
     }
 }
 
-pub fn check_cli(dirs: Vec<PathBuf>, remove: bool) {
+pub fn check_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
     let inst_pkgs = dir_func::check_installed(dirs.clone());
+    let remove = sub_matches.get_flag("remove");
+
     let mut dirs_set: HashSet<PathBuf> = dirs.clone().into_iter().collect();
     println!("\nPackages installed: \n");
     for dir in inst_pkgs.expect("Io error occured on checking files") {
@@ -247,11 +253,11 @@ pub fn check_cli(dirs: Vec<PathBuf>, remove: bool) {
     }
     if remove {
         let dirs = dirs_set.into_iter().collect();
-        remove_cli(dirs);
+        remove_command(dirs);
     }
 }
 
-pub fn remove_cli(dirs: Vec<PathBuf>) {
+pub fn remove_command(dirs: Vec<PathBuf>) {
     let cmd = dir_func::remove_uninstalled_dirs(dirs);
     match cmd {
         Some(mut c) => {
@@ -271,8 +277,12 @@ pub fn remove_cli(dirs: Vec<PathBuf>) {
         }
     }
 }
-pub async fn search_cli(search_name: String, ext_search: bool) {
+pub async fn search_command(sub_matches: ArgMatches) {
     let raur_handler = raur::Handle::new();
+    let ext_search = sub_matches.get_flag("search");
+    let search_name: &String = sub_matches
+        .get_one::<String>("search_name")
+        .expect("search_name argument required but couldn't get it");
     if ext_search {
         match raur_handler.search(search_name.clone()).await {
             Ok(pkg_vec) => {
