@@ -1,11 +1,11 @@
-use std::{collections::HashSet, env, ffi::OsString, io, path::PathBuf};
+use std::{collections::HashSet, env, ffi::OsString, io, path::PathBuf, sync::Arc};
 
 use crate::dir_func;
-use clap::Arg;
+use clap::{Arg, ArgMatches};
 use raur::Raur;
 
 pub struct Cli {
-    default_dir: OsString,
+    default_dir: String,
 }
 impl Cli {
     pub fn new() -> Self {
@@ -25,14 +25,17 @@ impl Cli {
                 }
             }
         };
-        home_dir.push("AUR");
+        home_dir.push("/AUR");
         Self {
-            default_dir: home_dir,
+            default_dir: home_dir
+                .to_str()
+                .expect("can't convert str of default dir to string")
+                .to_string(),
         }
     }
     // build the CLI with clap, -> pacman as inspiration
     // may panic, when no AUR_PATH is given
-    pub fn get_matches_cli(self) -> clap::ArgMatches {
+    pub fn get_cli_command(self) -> clap::Command {
         // arguments
         let remove_arg = Arg::new("remove")
             .short('r')
@@ -49,10 +52,9 @@ impl Cli {
             .action(clap::ArgAction::SetTrue)
             .help("generates the pacman command and installs the build packages, CALLS SUDO!");
 
-        // TODO: needs improvement for default value
         let aur_path_arg = Arg::new("AUR_PATH")
-            .default_value(&self.default_dir)
             .value_name("AUR_PATH")
+            .default_value(self.default_dir)
             .value_parser(clap::builder::PathBufValueParser::new())
             .value_hint(clap::ValueHint::DirPath)
             .help("The path to the aur-directories");
@@ -61,6 +63,14 @@ impl Cli {
             .short('s')
             .action(clap::ArgAction::SetTrue)
             .help("extended search for package name and description");
+
+        let search_name_arg = Arg::new("search_name")
+            .required(true)
+            .value_hint(clap::ValueHint::Other)
+            .action(clap::ArgAction::Set)
+            .value_parser(clap::builder::StringValueParser::new())
+            .help("a package name to search for")
+            .num_args(1);
 
         // end arguments
         //
@@ -86,29 +96,20 @@ impl Cli {
         let search = clap::Command::new("search")
             .short_flag('S')
             .about("searches for packages by a given name and shows informations about the package")
-            .arg(
-                Arg::new("search_name")
-                    .required(true)
-                    .value_hint(clap::ValueHint::Other)
-                    .action(clap::ArgAction::Set)
-                    .value_parser(clap::builder::StringValueParser::new())
-                    .help("a package name to search for")
-                    .num_args(1),
-            )
+            .arg(search_name_arg)
             .arg(search_arg);
         // end subcommands
 
         clap::Command::new("aur_helper")
             .about("a simple aur package helper for updating, building and installing AUR packages in a directory")
-            .arg(aur_path_arg)
             .arg_required_else_help(true)
+            .arg(aur_path_arg)
             .subcommand_required(true)
             .subcommand(update)
             .subcommand(build)
             .subcommand(install)
             .subcommand(check)
             .subcommand(search)
-            .get_matches()
     }
 }
 // .subcommand(

@@ -12,13 +12,11 @@ mod dir_func;
 // TODO: improve code-structure
 #[tokio::main]
 async fn main() {
-    let command = cli::Cli::new().get_matches_cli();
+    let command_matches = cli::Cli::new().get_cli_command().get_matches();
 
-    let path = command
+    let path = command_matches
         .get_one::<PathBuf>("AUR_PATH")
         .expect("AUR_PATH argument is required but not found!");
-    println!("{:?}", path);
-
 
     let dirs = match dir_func::get_dirs(path, true) {
         Ok(dirs) => dirs,
@@ -31,7 +29,7 @@ async fn main() {
         }
     };
 
-    match command.subcommand() {
+    match command_matches.subcommand() {
         Some(("update", sub_matches)) => {
             let build = sub_matches.get_flag("build");
             let install = sub_matches.get_flag("install");
