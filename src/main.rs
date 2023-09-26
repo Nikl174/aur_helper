@@ -31,19 +31,19 @@ async fn main() {
 
     match command_matches.subcommand() {
         Some(("update", sub_matches)) => {
-            cli::update_command(dirs, sub_matches.to_owned());
+            dir_func::update_command(dirs, sub_matches.to_owned());
         }
         Some(("build", sub_matches)) => {
-            cli::build_command(dirs, sub_matches.to_owned());
+            dir_func::build_command(dirs, sub_matches.to_owned());
         }
         Some(("install", _sub_matches)) => {
-            cli::install_command(dirs);
+            dir_func::install_command(dirs);
         }
         Some(("check", sub_matches)) => {
-            cli::check_command(dirs, sub_matches.to_owned());
+            dir_func::check_command(dirs, sub_matches.to_owned());
         }
         Some(("search", sub_matches)) => {
-            cli::search_command(sub_matches.to_owned()).await;
+            dir_func::search_command(sub_matches.to_owned()).await;
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);

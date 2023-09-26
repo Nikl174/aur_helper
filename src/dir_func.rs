@@ -1,14 +1,12 @@
-use std::fs;
-use std::fs::DirEntry;
-use std::fs::ReadDir;
-use std::io;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::ExitStatus;
+use raur::Raur;
+use std::fs::{DirEntry, ReadDir};
+use std::process::{Command, ExitStatus};
 use std::str::from_utf8;
-use std::time::Duration;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+use std::{collections::HashSet, io, path::PathBuf};
+use std::{fs, path::Path};
+
+use clap::ArgMatches;
 
 pub fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
     let mut rm_cmd = Command::new("rm");
@@ -171,7 +169,7 @@ pub fn update_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf,
 // returns the directories in path and warns if it's a wrong directory
 pub fn get_dirs(current_path: &Path, warn_wrong_dir: bool) -> Result<Vec<PathBuf>, io::Error> {
     let mut paths: Vec<PathBuf> = Vec::new();
-    println!("{:?}",current_path.canonicalize());
+    println!("{:?}", current_path.canonicalize());
     if !current_path.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -251,4 +249,204 @@ pub fn print_simple_pkg_info(pkg: raur::Package) {
             .unwrap_or("no description available".to_string())
     );
     println!("==================================");
+}
+//
+// ask for confirmation on stdout
+fn confirm_ask() -> Result<(), ()> {
+    println!("Continue? [Y|n]");
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => {
+            if input == "\n" || input == "Y" {
+                return Ok(());
+            } else {
+                println!("Aborting");
+                return Err(());
+            }
+        }
+        Err(err) => {
+            println!("IO-error: {:?}", err);
+            return Err(());
+        }
+    }
+}
+
+// helper function to get the diff between a bigger and a set that is contained in the bigger one
+fn get_set_diff(bigger_dir: Vec<PathBuf>, containing_dir: Vec<PathBuf>) -> Vec<PathBuf> {
+    let bigger_set: HashSet<PathBuf> = bigger_dir.into_iter().collect();
+    let containing_set: HashSet<PathBuf> = containing_dir.into_iter().collect();
+
+    let diff: HashSet<PathBuf> = bigger_set
+        .difference(&containing_set)
+        .into_iter()
+        .map(|x| x.clone())
+        .collect();
+    return diff.into_iter().collect();
+}
+
+pub fn update_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
+    let updated_dirs = update_packages(dirs.clone());
+    let build = sub_matches.get_flag("build");
+
+    let (updated_dirs, err) = match updated_dirs {
+        Ok(paths) => (paths, false),
+        Err(err_paths) => {
+            println!("ERROR in paths: \n {:?}\n", err_paths.clone());
+            (
+                get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()),
+                true,
+            )
+        }
+    };
+    println!("Updated packages: \n {:?}", updated_dirs);
+
+    if build {
+        if err {
+            if confirm_ask().is_err() {
+                return;
+            }
+        }
+        build_command(updated_dirs, sub_matches);
+    }
+}
+
+pub fn build_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
+    let build_pkgs = build_packages(dirs.clone());
+    let install = sub_matches.get_flag("install");
+
+    let (build_pkgs, err) = match build_pkgs {
+        Ok(paths) => (paths, false),
+        Err(err_paths) => {
+            println!("ERROR building some packages: \n {:?}", err_paths);
+            (
+                get_set_diff(dirs, err_paths.into_iter().map(|x| x.0).collect()),
+                true,
+            )
+        }
+    };
+    if install {
+        if err {
+            if confirm_ask().is_err() {
+                return;
+            }
+        }
+        install_command(build_pkgs);
+    }
+}
+
+pub fn install_command(dirs: Vec<PathBuf>) {
+    let install_cmd = install_packages(dirs);
+    let mut install_cmd = match install_cmd {
+        Ok(cmd) => cmd,
+        Err((cmd, err_paths)) => {
+            println!(
+                "Error on some Packages (not found or a read error): \n {:?}",
+                err_paths
+            );
+            match confirm_ask() {
+                Ok(_) => cmd,
+                Err(_) => return,
+            }
+        }
+    };
+    println!("Calling the following command: \n {:?}", install_cmd);
+    match confirm_ask() {
+        Ok(_) => {
+            install_cmd.status().expect("Error calling pacman");
+        }
+        Err(_) => return,
+    }
+}
+
+pub fn check_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
+    let inst_pkgs = check_installed(dirs.clone());
+    let remove = sub_matches.get_flag("remove");
+
+    let mut dirs_set: HashSet<PathBuf> = dirs.clone().into_iter().collect();
+    println!("\nPackages installed: \n");
+    for dir in inst_pkgs.expect("Io error occured on checking files") {
+        dirs_set.remove(&dir);
+        println!(
+            "{}",
+            dir.file_name()
+                .expect("couldn't get filename!")
+                .to_str()
+                .unwrap()
+        )
+    }
+    println!("\nPackages in directory and not installed: \n");
+    for dir in dirs_set.clone() {
+        println!(
+            "{}",
+            dir.file_name()
+                .expect("couldn't get filename!")
+                .to_str()
+                .unwrap()
+        )
+    }
+    if remove {
+        let dirs = dirs_set.into_iter().collect();
+        remove_command(dirs);
+    }
+}
+
+pub fn remove_command(dirs: Vec<PathBuf>) {
+    let cmd = remove_uninstalled_dirs(dirs);
+    match cmd {
+        Some(mut c) => {
+            print!("Calling: \n{}", c.get_program().to_str().unwrap());
+            for arg in c.get_args() {
+                print!(" {}", arg.to_str().unwrap());
+            }
+            match confirm_ask() {
+                Ok(_) => {
+                    c.status().expect("error on removing");
+                }
+                Err(_) => return,
+            }
+        }
+        None => {
+            println!("No unused directory, everything is installed")
+        }
+    }
+}
+pub async fn search_command(sub_matches: ArgMatches) {
+    let raur_handler = raur::Handle::new();
+    let ext_search = sub_matches.get_flag("search");
+    let search_name: &String = sub_matches
+        .get_one::<String>("search_name")
+        .expect("search_name argument required but couldn't get it");
+    if ext_search {
+        match raur_handler.search(search_name.clone()).await {
+            Ok(pkg_vec) => {
+                for pkg in pkg_vec {
+                    print_simple_pkg_info(pkg);
+                }
+            }
+            Err(err) => {
+                println!("Error while searching for {}: \n {}", search_name, err);
+            }
+        }
+    } else {
+        match raur_handler.info(&[search_name.clone()]).await {
+            Ok(pkg_vec) => {
+                println!("Pkg_vec len {}", pkg_vec.len());
+                let pkg = match pkg_vec.first() {
+                    Some(p) => p,
+                    None => {
+                        println!(
+                            "Couldn't find a package named '{}', try -Ss.",
+                            search_name.clone()
+                        );
+                        return;
+                    }
+                };
+                let pkg = pkg.clone();
+                print_detailed_pkg_info(pkg);
+            }
+            Err(err) => {
+                println!("Error while searching for {}: \n {}", search_name, err);
+            }
+        }
+    }
 }
