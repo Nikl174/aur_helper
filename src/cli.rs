@@ -2,6 +2,7 @@ use std::env;
 
 use clap::Arg;
 
+#[derive(Debug, Clone)]
 pub struct Cli {
     default_dir: String,
 }
@@ -31,6 +32,9 @@ impl Cli {
                 .to_string(),
         }
     }
+    pub fn get_aur_dir(&self) -> String {
+        return self.default_dir.clone();
+    }
     // build the CLI with clap, -> pacman as inspiration
     // may panic, when no AUR_PATH is given
     pub fn get_cli_command(self) -> clap::Command {
@@ -47,6 +51,7 @@ impl Cli {
 
         let install_arg = Arg::new("install")
             .short('i')
+            .long("install")
             .action(clap::ArgAction::SetTrue)
             .help("generates the pacman command and installs the build packages, CALLS SUDO!");
 
@@ -75,31 +80,40 @@ impl Cli {
         // subcommands
         let check = clap::Command::new("check")
             .short_flag('C')
+            .long_flag("check")
             .about("checks, which packages are actually installed")
             .arg(remove_arg.clone());
-        let install = clap::Command::new("install").short_flag('I').about(
+        let install = clap::Command::new("install")
+            .short_flag('I')
+            .long_flag("install")
+            .about(
             "generates the pacman command and installs the LAST BUILD packages, CALLS SUDO!",
         );
         let update = clap::Command::new("update")
             .short_flag('U')
+            .long_flag("update")
             .about("updates the git repos in the directory")
             .arg(build_arg.clone())
             .arg(install_arg.clone());
         let build = clap::Command::new("build")
             .short_flag('B')
+            .long_flag("build")
             .about("builds the packages recursively")
             .arg(install_arg.clone());
         // TODO: optional: download after search and select afterward
         let search = clap::Command::new("search")
             .short_flag('S')
+            .long_flag("search")
             .about("searches for packages by a given name and shows informations about the package")
             .arg(search_name_arg)
             .arg(search_arg);
+        let get_aur_dir = clap::Command::new("get-aur-dir")
+            .hide(true);
         // end subcommands
 
         clap::Command::new("aur_helper")
             .about("a simple aur package helper for updating, building and installing AUR packages in a directory")
-            .arg_required_else_help(true)
+            // .arg_required_else_help(true)
             .arg(aur_path_arg)
             .subcommand_required(true)
             .subcommand(update)
@@ -107,5 +121,6 @@ impl Cli {
             .subcommand(install)
             .subcommand(check)
             .subcommand(search)
+            .subcommand(get_aur_dir)
     }
 }

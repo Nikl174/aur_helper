@@ -12,7 +12,9 @@ mod dir_func;
 // TODO: improve code-structure
 #[tokio::main]
 async fn main() {
-    let command_matches = cli::Cli::new().get_cli_command().get_matches();
+    let cli = cli::Cli::new();
+    let dir = cli.get_aur_dir();
+    let command_matches = cli.get_cli_command().get_matches();
 
     let path = command_matches
         .get_one::<PathBuf>("AUR_PATH")
@@ -44,6 +46,9 @@ async fn main() {
         }
         Some(("search", sub_matches)) => {
             dir_func::search_command(sub_matches.to_owned()).await;
+        }
+        Some(("get-aur-dir", _)) => {
+            println!("{dir}");
         }
         Some((cmd, sub_matches)) => {
             println!("Unknown command '{cmd} {:?}'", sub_matches);

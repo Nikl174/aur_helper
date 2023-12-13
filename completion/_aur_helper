@@ -1,0 +1,63 @@
+#compdef aur_helper
+
+typeset -A opt_args
+setopt extendedglob
+
+# autoload -U is-at-least
+AUR_DIR="." # default dir for aur
+
+_aur_helper() {
+  AUR_DIR=$("${words[1]}" get-aur-dir)
+	check_help='checks, which packages are actually installed'
+	update_help='updates the git repos in the directory'
+	build_help='builds the packages recursively'
+	install_help='generates the pacman command and installs the build packages, CALLS SUDO!'
+	search_help='searches for packages by a given name and shows informations about the package'
+	remove_help='removes the not installed directorys from the aur dir'
+	help_help='show help'
+  search_search_help='extended search for package name and description'
+  declare -A subcmds alt_subcmds
+
+  subcmds[check]="-C[${check_help}]"
+  subcmds[update]="-U[${update_help}]"  
+  subcmds[build]="-B[${build_help}]"   
+  subcmds[install]="-I[${install_help}]" 
+  subcmds[help]="-h[${help_help}]"    
+  subcmds[search]="-S[${search_help}]"    
+
+  alt_subcmds[check]="--check[${check_help}]"
+  alt_subcmds[update]="--update[${update_help}]"  
+  alt_subcmds[build]="--build[${build_help}]"   
+  alt_subcmds[install]="--install[${install_help}]" 
+  alt_subcmds[help]="--help[${help_help}]"    
+  alt_subcmds[search]="--search[${search_help}]"    
+
+	# local OVERWRITE_AUR_PATH='::optionaly overwrite the AUR_PATH'
+	# local opt_aur_path="*:optional aur path overwrite:()"
+	# _arguments -s : $subcmds #$opt_aur_path $alt_subcmds
+
+  local args=(${${${(M)words:#-*}#-}:#-*})
+	case $args in #$words[2] in
+
+	U*) 
+    _arguments -s : "${subcmds[update]}" "-b[$build_help]" "-i[$install_help]" "${subcmds[help]}"
+    ;;
+	C*)
+		_arguments -s : "${subcmds[check]}" "-r[$remove_help]" "${subcmds[help]}"
+		;;
+	S*) 
+    _arguments -s : "${subcmds[search]}" "-s[$search_search_help]" "${subcmds[help]}" 
+    ;;
+	I*) 
+    _arguments -s : "${subcmds[install]}" "${subcmds[help]}"
+    ;;
+	B*) 
+    _arguments -s : "${subcmds[build]}" "-i[$install_help]" "${subcmds[help]}"
+    ;;
+	*)
+		_arguments -s : "${subcmds[@]}" "${alt_subcmds[@]}" "${subcmds[help]}"
+		;;
+
+	esac
+
+}
