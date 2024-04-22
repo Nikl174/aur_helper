@@ -12,7 +12,7 @@ mod dir_func;
 // TODO: improve code-structure
 #[tokio::main]
 async fn main() {
-    let cli = cli::Cli::new();
+    let cli = cli::Cli::new(None);
     let dir = cli.get_aur_dir();
     let command_matches = cli.get_cli_command().get_matches();
 
@@ -271,6 +271,6 @@ mod tests {
 
     #[test]
     fn cli_test() {
-        cli::Cli::new().get_cli_command().debug_assert();
+        cli::Cli::new(None).get_cli_command().debug_assert();
     }
 }
