@@ -6,6 +6,13 @@ setopt extendedglob
 # autoload -U is-at-least
 AUR_DIR="." # default dir for aur
 
+_aur_helper_packages() {
+  local -a packages packages_long
+  packages_long=(${AUR_DIR}/*)
+  packages=(${packages_long#${AUR_DIR}/})
+  compadd "$@" -a packages
+}
+
 _aur_helper() {
   AUR_DIR=$("${words[1]}" get-aur-dir)
 	check_help='checks, which packages are actually installed'
@@ -55,7 +62,7 @@ _aur_helper() {
     _arguments -s : "${subcmds[build]}" "-i[$install_help]" "${subcmds[help]}"
     ;;
 	*)
-		_arguments -s : "${subcmds[@]}" "${alt_subcmds[@]}" "${subcmds[help]}"
+		_arguments -s : "${subcmds[@]}" "${alt_subcmds[@]}" "${subcmds[help]}" '*:packages:_aur_helper_packages'
 		;;
 
 	esac
