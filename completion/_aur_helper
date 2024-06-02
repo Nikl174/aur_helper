@@ -47,22 +47,22 @@ _aur_helper() {
 	case $args in #$words[2] in
 
 	U*) 
-    _arguments -s : "${subcmds[update]}" "-b[$build_help]" "-i[$install_help]" "${subcmds[help]}"
+    _arguments -s : "${subcmds[update]}" "-b[$build_help]" "-i[$install_help]" "${subcmds[help]}" '*:packages:_aur_helper_packages'
     ;;
 	C*)
-		_arguments -s : "${subcmds[check]}" "-r[$remove_help]" "${subcmds[help]}"
+		_arguments -s : "${subcmds[check]}" "-r[$remove_help]" "${subcmds[help]}" '*:packages:_aur_helper_packages'
 		;;
 	S*) 
-    _arguments -s : "${subcmds[search]}" "-s[$search_search_help]" "${subcmds[help]}" 
+    _arguments -s : "${subcmds[search]}" "-s[$search_search_help]" "${subcmds[help]}"
     ;;
 	I*) 
-    _arguments -s : "${subcmds[install]}" "${subcmds[help]}"
+    _arguments -s : "${subcmds[install]}" "${subcmds[help]}" '*:packages:_aur_helper_packages'
     ;;
 	B*) 
-    _arguments -s : "${subcmds[build]}" "-i[$install_help]" "${subcmds[help]}"
+    _arguments -s : "${subcmds[build]}" "-i[$install_help]" "${subcmds[help]}" '*:packages:_aur_helper_packages'
     ;;
 	*)
-		_arguments -s : "${subcmds[@]}" "${alt_subcmds[@]}" "${subcmds[help]}" '*:packages:_aur_helper_packages'
+		_arguments -s : "${subcmds[@]}" "${alt_subcmds[@]}" "${subcmds[help]}" 
 		;;
 
 	esac
