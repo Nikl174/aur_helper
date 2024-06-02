@@ -1,0 +1,8 @@
+[package]
+name = "dir_func"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+raur.workspace = true
+clap.workspace = true
