@@ -1,11 +1,6 @@
 use std::path::PathBuf;
 
-
-use dir_func;
-
 mod cli;
-
-
 
 // TODO:
 // aur_helper update [dir]
@@ -36,20 +31,18 @@ async fn main() {
     };
 
     match command_matches.subcommand() {
-        Some(("update", sub_matches)) => {
-            dir_func::update_command(dirs, sub_matches.to_owned());
-        }
+        Some(("update", sub_matches)) => cli::update_command(dirs, sub_matches.to_owned()),
         Some(("build", sub_matches)) => {
-            dir_func::build_command(dirs, sub_matches.to_owned());
+            cli::build_command(dirs, sub_matches.to_owned());
         }
         Some(("install", _sub_matches)) => {
-            dir_func::install_command(dirs);
+            cli::install_command(dirs);
         }
         Some(("check", sub_matches)) => {
-            dir_func::check_command(dirs, sub_matches.to_owned());
+            cli::check_command(dirs, sub_matches.to_owned());
         }
         Some(("search", sub_matches)) => {
-            dir_func::search_command(sub_matches.to_owned()).await;
+            cli::search_command(sub_matches.to_owned()).await;
         }
         Some(("get-aur-dir", _)) => {
             println!("{dir}");
@@ -60,7 +53,6 @@ async fn main() {
         _ => unreachable!(),
     }
 }
-
 
 #[test]
 fn cli_test() {
