@@ -59,25 +59,21 @@ impl Cli {
             .short('r')
             .action(clap::ArgAction::SetTrue)
             .help("removes the not installed directorys from the aur dir");
-
         let build_arg = Arg::new("build")
             .short('b')
             .action(clap::ArgAction::SetTrue)
             .help("builds the updated packages");
-
         let install_arg = Arg::new("install")
             .short('i')
             .long("install")
             .action(clap::ArgAction::SetTrue)
             .help("generates the pacman command and installs the build packages, CALLS SUDO!");
-
         let aur_path_arg = Arg::new("AUR_PATH")
             .value_name("AUR_PATH")
             .default_value(self.default_dir)
             .value_parser(clap::builder::PathBufValueParser::new())
             .value_hint(clap::ValueHint::DirPath)
             .help("The path to the aur-directories");
-
         let search_arg = Arg::new("search")
             .short('s')
             .action(clap::ArgAction::SetTrue)
