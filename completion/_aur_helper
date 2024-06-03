@@ -2,6 +2,7 @@
 
 typeset -A opt_args
 setopt extendedglob
+compdef _aur_helper aur_helper
 
 # autoload -U is-at-least
 AUR_DIR="." # default dir for aur
