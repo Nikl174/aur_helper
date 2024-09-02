@@ -6,6 +6,10 @@ use std::time::{Duration, SystemTime};
 use std::{collections::HashSet, io, path::PathBuf};
 use std::{fs, path::Path};
 
+pub fn download_package() {
+    
+}
+
 pub fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
     let mut rm_cmd = Command::new("rm");
     rm_cmd.arg("-R").arg("-f");
@@ -218,17 +222,24 @@ pub fn print_detailed_pkg_info(pkg: raur::Package) {
         pkg.description
             .unwrap_or("no description available".to_string())
     );
-    let dep = pkg.depends.iter();
-    let mdep = pkg.make_depends.iter();
-    let odep = pkg.opt_depends.iter();
-    let big_dep = dep.zip(mdep).zip(odep); // hehe ;)
+    let mut dep = pkg.depends;
+    let mut mdep = pkg.make_depends;
+    let mut odep = pkg.opt_depends;
+    let mut cdep = pkg.check_depends;
+    let max_dep_size = dep.len().max(mdep.len()).max(odep.len()).max(cdep.len());
+    dep.resize(max_dep_size, "".to_string());
+    mdep.resize(max_dep_size, "".to_string());
+    odep.resize(max_dep_size, "".to_string());
+    cdep.resize(max_dep_size, "".to_string());
+
+    let big_dep = dep.iter().zip(mdep.iter()).zip(odep.iter()).zip(cdep.iter()); // hehe ;)
 
     println!(
-        "{: <20} | {: <20} | {: <20}",
-        "[Runtime]", "[Make]", "[Optional]"
+        "{: <25} | {: <25} | {: <25} | {: <25}",
+        "[Runtime]", "[Make]", "[Optional]", "[Check]"
     );
-    for ((d, md), od) in big_dep {
-        println!("{: <20} | {: <20} | {: <20}", d, md, od);
+    for (((d, md), od),cd) in big_dep {
+        println!("{: <25} | {: <25} | {: <25} | {: <25}", d, md, od, cd);
     }
     println!("");
     println!(
@@ -280,7 +291,7 @@ pub async fn search_aur(search_name: &String) {
     let raur_handler = raur::Handle::new();
     match raur_handler.info(&[search_name.clone()]).await {
         Ok(pkg_vec) => {
-            println!("Pkg_vec len {}", pkg_vec.len());
+            //println!("Pkg_vec len {}", pkg_vec.len());
             let pkg = match pkg_vec.first() {
                 Some(p) => p,
                 None => {
