@@ -18,11 +18,12 @@ General structure: `aur_helper [AUR_DIR] <-command> [params]`
 -   check, which packages are installed and which are orphaned
 -   build all packages in the dir and further actions with successful ones (install)
 -   install all latest builds again
+-   zsh shell completion
+-   update, build and install for specific package
 
 ### Todo
 
 -   download with -Sd
 -   maybe install with -Sdi
--   shell completion (bash, zsh)
--   gen manage
--   update, build and install for specific package
+-   shell completion (bash)
+-   gen man-page
