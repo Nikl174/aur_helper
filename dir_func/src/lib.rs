@@ -6,8 +6,52 @@ use std::time::{Duration, SystemTime};
 use std::{collections::HashSet, io, path::PathBuf};
 use std::{fs, path::Path};
 
-pub fn download_package() {
-    
+pub fn download_packages_from_git(
+    current_path: &Path,
+    git_links: Vec<String>,
+) -> Result<Vec<PathBuf>, (Vec<PathBuf>, Vec<String>)> {
+    let mut cloned_pkgs: Vec<PathBuf> = Vec::new();
+    let mut failed_cloned_pkgs: Vec<String> = Vec::new();
+
+    for link in git_links {
+        let pkg_name = match link.split("/").last() {
+            Some(name) => {
+                if name.find(".").is_some() {
+                    name.split(".")
+                        .next()
+                        .expect("Should be unreachable, name should have a '.'")
+                } else {
+                    name
+                }
+            }
+            None => {
+                failed_cloned_pkgs.push(link);
+                continue;
+            }
+        };
+
+        let cloned = match Command::new("git")
+            .current_dir(current_path)
+            .arg("clone")
+            .arg(link.clone())
+            .output()
+        {
+            Ok(proc) => proc.status,
+            Err(_) => {
+                failed_cloned_pkgs.push(link);
+                continue;
+            }
+        };
+        if cloned.success() {
+            let pkg_path = current_path.join(pkg_name);
+            cloned_pkgs.push(pkg_path);
+        }
+    }
+    if failed_cloned_pkgs.is_empty() {
+        return Ok(cloned_pkgs);
+    } else {
+        return Err((cloned_pkgs, failed_cloned_pkgs));
+    }
 }
 
 pub fn remove_uninstalled_dirs(paths: Vec<PathBuf>) -> Option<Command> {
@@ -125,6 +169,7 @@ pub fn build_packages(dirs: Vec<PathBuf>) -> Result<Vec<PathBuf>, Vec<(PathBuf, 
     let mut success_dirs: Vec<PathBuf> = Vec::new();
     for dir in dirs {
         let status = Command::new("makepkg")
+            .arg("-s")
             .current_dir(dir.clone())
             .status()
             .expect("Failed to execute makepkg");
@@ -232,13 +277,17 @@ pub fn print_detailed_pkg_info(pkg: raur::Package) {
     odep.resize(max_dep_size, "".to_string());
     cdep.resize(max_dep_size, "".to_string());
 
-    let big_dep = dep.iter().zip(mdep.iter()).zip(odep.iter()).zip(cdep.iter()); // hehe ;)
+    let big_dep = dep
+        .iter()
+        .zip(mdep.iter())
+        .zip(odep.iter())
+        .zip(cdep.iter()); // hehe ;)
 
     println!(
         "{: <25} | {: <25} | {: <25} | {: <25}",
         "[Runtime]", "[Make]", "[Optional]", "[Check]"
     );
-    for (((d, md), od),cd) in big_dep {
+    for (((d, md), od), cd) in big_dep {
         println!("{: <25} | {: <25} | {: <25} | {: <25}", d, md, od, cd);
     }
     println!("");

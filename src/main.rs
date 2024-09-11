@@ -21,15 +21,15 @@ async fn main() {
         .get_one::<PathBuf>("AUR_PATH")
         .expect("AUR_PATH argument is required but not found!");
 
-    let commands = ["update", "build", "install", "check"];
+    let local_commands = ["update", "build", "install", "check"];
 
     match command_matches.subcommand() {
         // Some(("update", sub_matches))
         // | Some(("build", sub_matches))
         // | Some(("install", sub_matches))
         // | Some(("check", sub_matches)) => {
-        Some((cmd, sub_matches)) if commands.contains(&cmd) => {
-            let dirs = match get_dirs(path, sub_matches) {
+        Some((cmd, sub_matches)) if local_commands.contains(&cmd) => {
+            let pkg_dirs = match get_dirs(path, sub_matches) {
                 Ok(dirs) => dirs,
                 Err(err) => {
                     println!(
@@ -41,15 +41,18 @@ async fn main() {
             };
 
             match cmd {
-                "update" => cli::update_command(dirs, sub_matches.to_owned()),
-                "build" => cli::build_command(dirs, sub_matches.to_owned()),
-                "install" => cli::install_command(dirs),
-                "check" => cli::check_command(dirs, sub_matches.to_owned()),
+                "update" => cli::update_command(pkg_dirs, sub_matches.to_owned()),
+                "build" => cli::build_command(pkg_dirs, sub_matches.to_owned()),
+                "install" => cli::install_command(pkg_dirs),
+                "check" => cli::check_command(pkg_dirs, sub_matches.to_owned()),
                 _ => unreachable!(),
             }
         }
         Some(("search", sub_matches)) => {
             cli::search_command(sub_matches.to_owned()).await;
+        }
+        Some(("download", sub_matches)) => {
+            cli::download_command(path, sub_matches.to_owned());
         }
         Some(("get-aur-dir", _)) => {
             println!("{dir}");

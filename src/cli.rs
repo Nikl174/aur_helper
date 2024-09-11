@@ -54,6 +54,7 @@ impl Cli {
         let aur_packet_arg = Arg::new("AUR_PACKAGES")
             .value_name("AUR_PACKAGES")
             .help("package names in the AUR_DIR the current command should be applied to")
+            .num_args(0..)
             .action(clap::ArgAction::Set);
         let remove_arg = Arg::new("remove")
             .short('r')
@@ -85,11 +86,25 @@ impl Cli {
             .value_parser(clap::builder::StringValueParser::new())
             .help("a package name to search for")
             .num_args(1);
+        let download_links_arg = Arg::new("download_links")
+            .required(true)
+            .num_args(0..)
+            //.value_hint(clap::ValueHint::Other)
+            .action(clap::ArgAction::Set)
+            //.value_parser(clap::builder::StringValueParser::new())
+            .help("a link or list of links for repos to clone; uses the AUR, if only a package name is provided");
 
         // end arguments
         //
         //
         // subcommands
+        let download = clap::Command::new("download")
+            .short_flag('D')
+            .long_flag("download")
+            .about("Clones the Repos to the AUR dir")
+            .arg(build_arg.clone())
+            .arg(install_arg.clone())
+            .arg(download_links_arg);
         let check = clap::Command::new("check")
             .short_flag('C')
             .long_flag("check")
@@ -135,8 +150,57 @@ impl Cli {
             .subcommand(check)
             .subcommand(search)
             .subcommand(get_aur_dir)
+            .subcommand(download)
     }
 }
+
+fn string_to_link(package: &String) -> String {
+    let mut aur_link = "https://aur.archlinux.org/".to_owned();
+    if package.find("/").is_none() {
+        aur_link.push_str(package);
+        aur_link.push_str(".git");
+        aur_link.to_owned()
+    } else {
+        package.to_owned()
+    }
+}
+
+pub fn download_command(aur_path: &PathBuf, sub_matches: ArgMatches) {
+    let links: Vec<String> = sub_matches
+        .get_many::<String>("download_links")
+        .expect("search_name argument required but couldn't get it")
+        .map(|item| string_to_link(item))
+        .collect();
+
+    let download_dirs = download_packages_from_git(aur_path, links);
+    let build = sub_matches.get_flag("build");
+
+    let (download_dirs, err) = match download_dirs {
+        Ok(cloned_dirs) => {
+            println!("Downloaded packages: \n {:?}", cloned_dirs);
+            (cloned_dirs, false)
+        }
+        Err((cloned_dirs, failed_links)) => {
+            println!("ERROR downloading packages!\n Failed downloads: \n {:?} \n Successfull downloads: \n {:?}", failed_links, cloned_dirs);
+            (cloned_dirs, true)
+        }
+    };
+
+    if build {
+        if err {
+            if confirm_ask(Some("Remove downloaded Packages?".to_owned())).is_ok() {
+                remove_command(download_dirs.clone());
+            } else {
+                return;
+            }
+        }
+        if confirm_ask(None).is_err() {
+            return;
+        }
+        build_command(download_dirs, sub_matches);
+    }
+}
+
 pub fn update_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
     let updated_dirs = update_packages(dirs.clone());
     let build = sub_matches.get_flag("build");
@@ -155,7 +219,7 @@ pub fn update_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
 
     if build {
         if err {
-            if confirm_ask().is_err() {
+            if confirm_ask(None).is_err() {
                 return;
             }
         }
@@ -179,7 +243,7 @@ pub fn build_command(dirs: Vec<PathBuf>, sub_matches: ArgMatches) {
     };
     if install {
         if err {
-            if confirm_ask().is_err() {
+            if confirm_ask(None).is_err() {
                 return;
             }
         }
@@ -196,14 +260,14 @@ pub fn install_command(dirs: Vec<PathBuf>) {
                 "Error on some Packages (not found or a read error): \n {:?}",
                 err_paths
             );
-            match confirm_ask() {
+            match confirm_ask(None) {
                 Ok(_) => cmd,
                 Err(_) => return,
             }
         }
     };
     println!("Calling the following command: \n {:?}", install_cmd);
-    match confirm_ask() {
+    match confirm_ask(None) {
         Ok(_) => {
             install_cmd.status().expect("Error calling pacman");
         }
@@ -251,7 +315,8 @@ pub fn remove_command(dirs: Vec<PathBuf>) {
             for arg in c.get_args() {
                 print!(" {}", arg.to_str().unwrap());
             }
-            match confirm_ask() {
+            println!("");
+            match confirm_ask(None) {
                 Ok(_) => {
                     c.status().expect("error on removing");
                 }
@@ -276,8 +341,8 @@ pub async fn search_command(sub_matches: ArgMatches) {
 }
 
 // ask for confirmation on stdout
-fn confirm_ask() -> Result<(), ()> {
-    println!("Continue? [Y|n]");
+fn confirm_ask(msg: Option<String>) -> Result<(), ()> {
+    println!("{} [Y|n]", msg.unwrap_or("Continue?".to_owned()));
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_) => {
